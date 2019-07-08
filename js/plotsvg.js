@@ -79,7 +79,7 @@ function PlotSVG (initObj = {}, parent = document.body) {
 		
 	}
 	
-	this.saveAsFile = function (name = (that.svg.hasAttribute("id") ? that.svg.getAttribute("id") : "") + "plot.svg") {
+	this.saveAsFile = function (name = (this.scaleObj.saveFileName ? this.scaleObj.saveFileName :(that.svg.hasAttribute("id") ? that.svg.getAttribute("id") : "plot")) + ".svg") {
 		 var svg_data = that.svg.outerHTML;
 
 		var blob = new Blob([svg_data], {type: "image/svg+xml"});  
@@ -101,7 +101,7 @@ function PlotSVG (initObj = {}, parent = document.body) {
 
 PlotSVG.prototype = new Object();
 
-PlotSVG.defaults = {width: 400, height: 600, dpi: 96, saveButton: false, saveButtonName: "Save"};
+PlotSVG.defaults = {width: 400, height: 600, dpi: 96, saveButton: false, saveButtonName: "Save", saveFileName: ""};
 
 
 

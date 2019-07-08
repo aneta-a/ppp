@@ -32,6 +32,7 @@ function pageInit() {
 	if (qs.hasOwnProperty("polyhedron")) curPoly = qs.polyhedron;
 	
 	//drawSpiralTemplate(psvg, type, edge);
+	console.log("before data reading");
 	readCSVData("templates.csv");
 	document.body.appendChild(document.createElement("p"));
 	var b = document.createElement("button");
@@ -60,6 +61,8 @@ function readCSVData (name) {
 }
 
 function onCSVRead (text) {
+	console.log("oncsvread");
+
 	polyData = text.split("\n");
 	for (var i = 0; i < polyData.length; i++) {
 		polyData[i] = polyData[i].split(",");
@@ -97,8 +100,8 @@ function onCSVRead (text) {
 		curPoly = curPoly.charAt(0).toUpperCase() + curPoly.slice(1);
 		d.innerHTML = "<h1>" + curPoly + "</h1><p>Vertex figure: " + curVF + "</p>";
 		d.innerHTML += "<p>Edge length: " + (Math.round(pixelsToCm(edge)*100)/100) + " cm</p>";
-		d.innerHTML += "<p>Approx. diameter: " + (Math.round(pixelsToCm(edge*polyData[curPolyInd][dInd])*100)/100) + " cm</p>";
-		d.innerHTML += "<p>Templates: " + curTemplates + "</p>";
+		d.innerHTML += "<p>Approximate diameter: " + (Math.round(pixelsToCm(edge*polyData[curPolyInd][dInd])*100)/100) + " cm</p>";
+		//d.innerHTML += "<p>Templates: " + curTemplates + "</p>";
 		document.body.appendChild(d);
 		
 		drawTemplates(curTemplates);
@@ -106,20 +109,29 @@ function onCSVRead (text) {
 }
 
 function drawTemplates(templates) {
+	
 	var templSets = templates.split(" ");
+	console.log("draw templates", templSets);
 	for (var i = 0; i < templSets.length; i++) {
 		var d = document.createElement("div");
 		document.body.appendChild(d);
-		var p = document.createElement("p");
-		p.innerHTML = templSets[i];
+		var p = document.createElement("h2");
+		p.innerHTML = "Type " + (i+1);//templSets[i];
 		d.appendChild(p);
 		var singleTemplates = templSets[i].split("+");
 		//function drawFacesPreview(parent, color, templatesArray) {
+		p = document.createElement("h3");
+		p.innerHTML= "Faces preview";
+		d.appendChild(p);
 		drawFacesPreview(d, "#ffaa00", singleTemplates);
 		d = document.createElement("div");
 		document.body.appendChild(d);
+		p = document.createElement("h3");
+		p.innerHTML= "Templates";
+		d.appendChild(p);
+
 		for (var j = 0; j < singleTemplates.length; j++) {
-			var psvg = new PlotSVG ({id: singleTemplates[j] + "_" + i+ "_" + edge, saveButton: true}, d);
+			var psvg = new PlotSVG ({id: singleTemplates[j] + "_" + i+ "_" + edge, saveButton: true, saveButtonName: "Save page " + (j+1), saveFileName: curPoly.split(" ").join("_") + "_type" + (i+1) + "_page" + (j+1) + "of" + singleTemplates.length + "_edge" + edge + "px_dpi" + defaultDPI}, d);
 			drawSpiralTemplate(psvg, singleTemplates[j], edge);
 			
 			
@@ -168,6 +180,7 @@ function getFacesTypes(templatesArray) {
 }
 
 function drawFacesPreview(parent, color, templatesArray) {
+	console.log("drawFacesPreview", parent);
 	var types = getFacesTypes(templatesArray);
 	var maxN = 0;
 	for (var f in types)
