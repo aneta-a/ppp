@@ -157,7 +157,7 @@ function plotParInit(qs, plotPar) {
 			plotPar.maxX = plotPar.x0 + 0.5*plotPar.dx;
 			plotPar.minX = plotPar.x0 - 0.5*plotPar.dx;
 		}
-		console.log(plotPar);
+		
 		return plotPar;
 }
 

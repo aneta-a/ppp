@@ -19,30 +19,13 @@ function cmToPixels (arg, dpi = defaultDPI) {
 
 function pageInit() {
 	qs = parseQueryString();
-	//var p = document.createElement("p");
-	//p.innerHTML = "Test paragraph";
-	//document.body.appendChild(p);
-	//var psvg = new PlotSVG({id: "testtemplate"});
-	
 	
 	if (qs.hasOwnProperty("size")) edge = qs.size;
 	if (qs.hasOwnProperty("edge")) edge = qs.edge;
 	var type = "s35";
 	if (qs.hasOwnProperty("type")) type = qs.type;
 	if (qs.hasOwnProperty("polyhedron")) curPoly = qs.polyhedron;
-	
-	//drawSpiralTemplate(psvg, type, edge);
-	console.log("before data reading");
 	readCSVData("templates.csv");
-	document.body.appendChild(document.createElement("p"));
-	var b = document.createElement("button");
-	b.innerHTML = "Save";
-	b.onclick = function (e) {
-		psvg.saveAsFile(type + "_" + edge + "_template.svg");
-	}
-	//document.body.appendChild(b);
-	
-
 	
 }
 
@@ -61,8 +44,6 @@ function readCSVData (name) {
 }
 
 function onCSVRead (text) {
-	console.log("oncsvread");
-
 	polyData = text.split("\n");
 	for (var i = 0; i < polyData.length; i++) {
 		polyData[i] = polyData[i].split(",");
@@ -83,7 +64,6 @@ function onCSVRead (text) {
 		}
 	} else {
 		for (var i = 1; i < polyData.length; i++) {
-			console.log(i, polyData[i][nameInd]);
 			if (polyData[i][nameInd] && polyData[i][nameInd].toLowerCase() == curPoly.toLowerCase()) {
 				curPolyInd = i;
 				
@@ -111,13 +91,14 @@ function onCSVRead (text) {
 function drawTemplates(templates) {
 	
 	var templSets = templates.split(" ");
-	console.log("draw templates", templSets);
 	for (var i = 0; i < templSets.length; i++) {
 		var d = document.createElement("div");
 		document.body.appendChild(d);
 		var p = document.createElement("h2");
-		p.innerHTML = "Type " + (i+1);//templSets[i];
-		d.appendChild(p);
+		if (templSets.length > 1) {
+			p.innerHTML = "Type " + (i+1);//templSets[i];
+			d.appendChild(p);
+		}
 		var singleTemplates = templSets[i].split("+");
 		//function drawFacesPreview(parent, color, templatesArray) {
 		p = document.createElement("h3");
@@ -131,7 +112,14 @@ function drawTemplates(templates) {
 		d.appendChild(p);
 
 		for (var j = 0; j < singleTemplates.length; j++) {
-			var psvg = new PlotSVG ({id: singleTemplates[j] + "_" + i+ "_" + edge, saveButton: true, saveButtonName: "Save page " + (j+1), saveFileName: curPoly.split(" ").join("_") + "_type" + (i+1) + "_page" + (j+1) + "of" + singleTemplates.length + "_edge" + edge + "px_dpi" + defaultDPI}, d);
+			var psvg = new PlotSVG ({
+				id: singleTemplates[j] + "_" + i+ "_" + edge, 
+				saveButton: true, 
+				saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) : ""), 
+				saveFileName: "ppp_" + curPoly.split(" ").join("_") +
+				 (templSets.length > 1 ? "_type" + (i+1) : "") + 
+				 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
+				 "_edge" + edge + "px_dpi" + defaultDPI}, d);
 			drawSpiralTemplate(psvg, singleTemplates[j], edge);
 			
 			
@@ -180,7 +168,6 @@ function getFacesTypes(templatesArray) {
 }
 
 function drawFacesPreview(parent, color, templatesArray) {
-	console.log("drawFacesPreview", parent);
 	var types = getFacesTypes(templatesArray);
 	var maxN = 0;
 	for (var f in types)
