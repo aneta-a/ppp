@@ -1,4 +1,3 @@
-var Ns = [3, 4, 5, 6, /*7,*/ 8,/* 9,*/ 10, 20, 50, 100, 200, 500, 10000]
 var colors = ["darkgreen", "blue", "red" , "magenta", "#00ccff", "#ffaa00", "#cccccc", "#aaaaaa", "#999999", "#666666", "#333333", "black"]
 var DefaultGetTau = "metallic";
 
@@ -9,6 +8,7 @@ var curVF = "";
 var curTemplates = "";
 var edge = 300;
 var defaultDPI = 96;
+var thickness = 0.5;//mm
 
 function pixelsToCm (arg, dpi = defaultDPI) {
 	return arg/dpi*2.54;
@@ -25,17 +25,37 @@ function pageInit() {
 	var type = "s35";
 	if (qs.hasOwnProperty("type")) type = qs.type;
 	if (qs.hasOwnProperty("polyhedron")) curPoly = qs.polyhedron;
+	if (qs.hasOwnProperty("thickness")) thickness = qs.thickness;
+	//readTemplateStyle();
 	readCSVData("templates.csv");
 	
+}
+
+function readTemplateStyle() {
+	var styleToSave = document.getElementById("templateStyle");
+	if (styleToSave) {
+		var xmlhttp = new XMLHttpRequest();
+		xmlhttp.onreadystatechange = function(){
+		  if(xmlhttp.status == 200 && xmlhttp.readyState == 4){
+			txt = xmlhttp.responseText;
+			console.log("Style to save", txt);
+			PlotSVG.CommonStyle = txt;
+		  }
+		};
+		xmlhttp.open("GET",styleToSave.getAttribute("href"),true);
+		xmlhttp.send();	
+	}
 }
 
 function readCSVData (name) {
 
 	var txt = '';
+	console.log("Reading data...");
 	var xmlhttp = new XMLHttpRequest();
 	xmlhttp.onreadystatechange = function(){
 	  if(xmlhttp.status == 200 && xmlhttp.readyState == 4){
 	    txt = xmlhttp.responseText;
+	    console.log("Done");
 		onCSVRead(txt);
 	  }
 	};
@@ -76,15 +96,22 @@ function onCSVRead (text) {
 		curPoly = polyData[curPolyInd][nameInd];
 		curTemplates = polyData[curPolyInd][templInd];
 		curVF = polyData[curPolyInd][vfInd];
-		var d = document.createElement("div");
+		var h = document.createElement("h1");
 		curPoly = curPoly.charAt(0).toUpperCase() + curPoly.slice(1);
-		d.innerHTML = "<h1>" + curPoly + "</h1><p>Vertex figure: " + curVF + "</p>";
+		h.innerHTML = curPoly;
+		document.body.appendChild(h);
+		var d = document.createElement("div");
+		d.setAttribute("class", "description");
+		
+		d.innerHTML = "<p>Vertex figure: " + curVF + "</p>";
 		d.innerHTML += "<p>Edge length: " + (Math.round(pixelsToCm(edge)*100)/100) + " cm</p>";
 		d.innerHTML += "<p>Approximate diameter: " + (Math.round(pixelsToCm(edge*polyData[curPolyInd][dInd])*100)/100) + " cm</p>";
 		//d.innerHTML += "<p>Templates: " + curTemplates + "</p>";
 		document.body.appendChild(d);
 		
 		drawTemplates(curTemplates);
+	} else {
+		console.warn("Invalid polyhedron name or vertex figure", curPoly, qs.vf);
 	}
 }
 
@@ -93,6 +120,7 @@ function drawTemplates(templates) {
 	var templSets = templates.split(" ");
 	for (var i = 0; i < templSets.length; i++) {
 		var d = document.createElement("div");
+		d.setAttribute("class", "typeBlock");
 		document.body.appendChild(d);
 		var p = document.createElement("h2");
 		if (templSets.length > 1) {
@@ -104,14 +132,21 @@ function drawTemplates(templates) {
 		p = document.createElement("h3");
 		p.innerHTML= "Faces preview";
 		d.appendChild(p);
-		drawFacesPreview(d, "#ffaa00", singleTemplates);
-		d = document.createElement("div");
-		document.body.appendChild(d);
+		var dd = document.createElement("div");
+		dd.setAttribute("class", "facesPreviewBlock");
+		d.appendChild(dd);
+		drawFacesPreview(dd, "#ffaa00", singleTemplates);
 		p = document.createElement("h3");
 		p.innerHTML= "Templates";
 		d.appendChild(p);
+		dd = document.createElement("div");
+		dd.setAttribute("class", "templatesPreviewBlock");
+		d.appendChild(dd);
 
 		for (var j = 0; j < singleTemplates.length; j++) {
+			var s = document.createElement("div");
+			s.setAttribute("class", "templatePage");
+			dd.appendChild(s);
 			var psvg = new PlotSVG ({
 				id: singleTemplates[j] + "_" + i+ "_" + edge, 
 				saveButton: true, 
@@ -119,7 +154,7 @@ function drawTemplates(templates) {
 				saveFileName: "ppp_" + curPoly.split(" ").join("_") +
 				 (templSets.length > 1 ? "_type" + (i+1) : "") + 
 				 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
-				 "_edge" + edge + "px_dpi" + defaultDPI}, d);
+				 "_edge" + edge + "px_dpi" + defaultDPI}, s);
 			drawSpiralTemplate(psvg, singleTemplates[j], edge);
 			
 			
@@ -181,6 +216,7 @@ function drawFacesPreview(parent, color, templatesArray) {
 	function getCanvas(scale) {
 		var w = maxSize * scale;
 		var cs = new PlotCanvas({width: w, height: w, minX: -scale, maxX: scale, minY: -scale, maxY: scale}, parent);
+		cs.canvas.setAttribute("class", "facePreview");
 		return cs;  
 	}
 	for (var i = 0; i < types.flat.length; i++) {
@@ -206,6 +242,15 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 	var tObj = parseType(type);
 	var cutData = {xs:[], ys:[]};
 	var etchData = {xs:[], ys:[]};
+	var circlesData = {xs: [], ys: []};
+	var circlesRadii = [];
+	var circlesDelta = cmToPixels(thickness/20);
+	
+	function addCircle(data, N) {
+		circlesData.xs.push(data.xs[N]);
+		circlesData.ys.push(data.ys[N]);
+		circlesRadii.push(circlesDelta*(N-1));
+	}
 	
 	switch (tObj.letters) {
 		case "s":
@@ -216,6 +261,8 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 			var p2 = {x: size, y: 0};
 			cutData = getTemplateData(p1, p2, tObj.numbers[0]);
 			var cutDataInv = getTemplateData(p2, p1, tObj.numbers[1]);
+			addCircle(cutData, tObj.numbers[0]);
+			addCircle(cutDataInv, tObj.numbers[1]);
 			cutData = concatPolyData(cutData, cutDataInv);
 			etchData = {xs: [p1.x, p2.x], ys: [p1.y, p2.y]};
 			break;
@@ -235,6 +282,7 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 				etchData.xs.push(p1.x);
 				etchData.ys.push(p1.y);
 				var curCutData = getTemplateData(p1, p0, tObj.numbers[1+i%2]);
+				addCircle(curCutData, tObj.numbers[1+i%2]);
 				cutData = concatPolyData(cutData, curCutData);
 			}
 			break;
@@ -270,6 +318,8 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 				curCutData = getTemplateData({x: etchData.xs[inds[i][0]], y: etchData.ys[inds[i][0]]},
 											 {x: etchData.xs[inds[i][1]], y: etchData.ys[inds[i][1]]}, 
 											 inds[i][2]);
+				addCircle(curCutData, inds[i][2]);
+
 				cutData = concatPolyData(cutData, curCutData);
 			}
 			break;
@@ -289,9 +339,11 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 			etchData.xs[5] = size; 
 			etchData.ys[5] = 0;
 			for (var i = 1; i < 5; i++) {
+				var curN = i%2 ? 3 : tObj.numbers[0];
 				var curCutData = getTemplateData({x: etchData.xs[i+1], y: etchData.ys[i+1]}, 
 													{x: etchData.xs[i], y: etchData.ys[i]}, 
-													i%2 ? 3 : tObj.numbers[0]);
+													curN);
+				addCircle(curCutData, curN);
 				cutData = concatPolyData(cutData, curCutData);
 			}
 	}
@@ -299,17 +351,23 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 	var angle = getMinAreaAngle(cutData, Math.sqrt(2));
 	cutData = rotateData(angle, cutData);
 	etchData = rotateData(angle, etchData);
+	circlesData = rotateData(angle,circlesData);
 	
 	var shft = psvg.setSizeByArrays(cutData.xs, cutData.ys);
 	//function shiftData(dx, dy, data, res) //utils.js
 	cutData = shiftData(-shft.xMin, -shft.yMin, cutData);
 	etchData = shiftData(-shft.xMin, -shft.yMin, etchData);
+	circlesData = shiftData(-shft.xMin, -shft.yMin, circlesData);
 	
-	//this.drawPolygon = function (xs, ys, style) { //plotsvg.js
-	var cutStyle = "stroke:rgb(0,0,0);stroke-width:1.5;fill:none";
-	var etchStyle = "stroke:rgb(0,0,0);stroke-width:.5;fill:none";
+	//this.drawPolygon = function (xs, ys, options) { //plotsvg.js
+	var cutStyle = {class: "cut"};//"stroke:rgb(0,0,0);stroke-width:1.5;fill:none"};
+	var etchStyle = {class: "etch"};// "stroke:rgb(0,0,0);stroke-width:.5;fill:none"};
 	psvg.drawPolygon(cutData.xs, cutData.ys, cutStyle);
 	psvg.drawPolygon(etchData.xs, etchData.ys, etchStyle);
+	//console.log("circles", circlesData);
+	for (var i = 0; i < circlesData.xs.length; i++) {
+		psvg.drawCircle(circlesData.xs[i], circlesData.ys[i], circlesRadii[i], cutStyle);
+	}
 	
 	
 

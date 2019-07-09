@@ -82,7 +82,7 @@ function drawFaceTemplate(cs, N, tau, color, start = 0) {
 }
 
 function drawFacePolygon(cs, N, tau, color, scale=1) {
-	console.log(N, tau, color, scale);
+	
 	for (var i = 0; i < N; i++)
 		drawFacePolygonPart(cs, N, tau, color, i, true, scale);
 }
@@ -96,7 +96,7 @@ function drawEmptyFace(cs, N, color, scale=1) {
 	//getSpiralArrays(res, fullSteps, tau=1, steps = -1, startStep = 0, startr = 1)
 	var data = {};
 	getSpiralArrays(data, N);
-	console.log("drawEmptyFace", data);
+	
 	if (scale != 1) {
 		for (var i = 0; i < data.xs.length; i++) {
 			data.xs[i]*=scale;
