@@ -1,0 +1,22 @@
+svg {
+	background-color: #ffffff;
+}
+
+svg > .cut {
+	stroke: rgb(0, 0, 0);
+	stroke-width: 1.5;
+	fill: none;
+}
+
+svg > .etch {
+	stroke:rgb(0,0,0);
+	stroke-width:.5;
+	fill: none;
+}
+
+svg > .ignore {
+	stroke:rgb(100,100,100);
+	stroke-width:.5;
+	fill: none;
+}
+
