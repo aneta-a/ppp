@@ -9,6 +9,8 @@
 	<script type="text/javascript" src="libs/Blob.js"></script>
 	  
 	<script type="text/javascript" src="libs/FileSaver.min.js"></script>
+	<script type="text/javascript" src="libs/three.js"></script>
+	<script type="text/javascript" src="libs/OrbitControls.js"></script>
 	<script type="text/javascript" src="js/utils.js"></script>
 	  
 	<script type="text/javascript" src="js/plotsvg.js"></script>
@@ -16,12 +18,21 @@
 	<script type="text/javascript" src="js/script.js"></script>
 	<script type="text/javascript" src="js/plotcanvas.js"></script>
 	<script type="text/javascript" src="js/drawfaces.js"></script>
+	<script type="text/javascript" src="lp/LogicalPolyhedron.js"></script>
+	<script type="text/javascript" src="lp/HyperPlane.js"></script>
+	<script type="text/javascript" src="lp/display3d.js"></script>
     <!--script type="text/javascript" src="js/strings.js"></script-->
-    <!--script type="text/javascript" src="libs/UIUtils.js"></script-->
+    <script type="text/javascript" src="libs/UIUtils.js"></script>
     <!--script type="text/javascript" src="js/display.js"></script-->
 
 	
 </head>
 <body onload="pageInit();">
+<div class="side-bar" id="list">
+<button id="hideMenuButton" onclick="hideSideMenu();">x</button><button id="menuButton" onclick="showSideMenu()">&gt;</button>
+</div>
+<div class="main" id="main">
+<!--input type="text" pattern="-?((\d*\.\d+)|(\d+))((e|E)-?\d+)?" id="testInput" title="Valid number"-->
+</div>
 </body>
 </html>

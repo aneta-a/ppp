@@ -7,6 +7,101 @@ body {
 	font-size: 0.875em;
 	color: #660000;
 	
+	
+}
+
+p, h1,h2 {
+ 	margin: 0px;
+}
+
+button {
+
+  background-color: #995555;
+  border: none;
+  color: #ffffee;
+  padding: 5px 10px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 2px;
+  /*font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;*/
+
+}
+#hideMenuButton,  #menuButton{
+	position: absolute;
+	right: 0;
+	top: 0;
+	background-color: #663333;
+	padding: 2px;
+	font-weight: bold;
+	font-size: 1.5em;
+}
+ /*{
+	position: absolute;
+	right: 0;
+	top: 0;
+	background-color: #663333;
+}*/
+.main {
+	transition: margin-left .5s;
+	padding-left: 10px;
+	padding-top: 0px;
+	padding-bottom: 0px;
+	padding-right: 0px;
+}
+.side-bar {
+  height: 100%; 
+  width: 0; 
+  position: fixed; 
+  z-index: 1; 
+  top: 0; 
+  left: 0;
+  background-color: #663333;
+  overflow-x: hidden; /* Disable horizontal scroll */
+  padding-top: 8px; 
+  transition: 0.5s; 
+  color: #eeffcc;
+  padding-left: 16px;
+}
+.linksList {
+	padding: 4px;
+}
+/*
+@media screen and (max-height: 450px) {
+  .side-bar {padding-top: 15px;}
+  .side-bar a {font-size: 18px;}
+}*/
+
+.side-bar a {
+  padding: 4px 4px 4px 20px;
+  text-decoration: none;
+  /*font-size: 25px;*/
+  color: #bbccaa;
+  display: block;
+  transition: 0.3s;
+}
+
+.side-bar a:hover {
+  color: #eeffcc;
+}
+
+
+.description {
+	margin: 4px;
+	padding-top: 0px;
+}
+.typeBlocksContainer {
+ display: flex;
+ flex-wrap: wrap;
+ padding: 0px;
+}
+
+.typeBlock {
+	border: 1px solid darkred;
+	padding: 4px;
+	margin: 4px;
 }
 
 .all {
@@ -31,11 +126,22 @@ img#imgmail {
 	display: inline;
 }
 
+svg {
+	padding: 10px;
+}
+
+canvas {
+/*background-color: #ffffff;*/
+}
 canvas.facePreview {
 	background-color: #00000000;	
 	
 	flex-grow: 0;
 	margin-bottom: auto;
+}
+canvas.preview3d {
+margin-bottom: auto;
+background-color: #00000000;	
 }
 
 
@@ -54,12 +160,16 @@ canvas.facePreview {
 .templatePage {
 	margin-top: auto;
 	 padding: 10px;
+	 
 	
 
 }
 .templatePage > button {
 	display: block;
-}
+	background-color: lightgray;
+  border: 1px solid black;
+  color: #333333;
+ }
 
 .canvasblock {
 	width: 100%;
