@@ -11,16 +11,19 @@ function parseQueryString(){
 		var params = queryString.split("&");
 		for (var i = 0; i < params.length; i++){
 			var keyValue = params[i].split("=");
-			res[keyValue[0]] = keyValue[1];
+			var val = Number(keyValue[1]);
+			res[keyValue[0]] = !Number.isNaN(val) ? val : keyValue[1];
 		}
 			
 	}
 	return res;
 }
 
+
 function getBool(arg) {
 	if (arg) {
-		if (typeof arg === "string" && arg.toLowerCase() == "no") return false;
+		if (!isNaN(arg)) return arg != 0;
+		if (typeof arg === "string" && arg.toLowerCase().charAt(0) == "n") return false;
 		if (typeof arg === "string" && arg.toLowerCase() == "false") return false;
 		if (arg == "0") return false;
 		return true;
@@ -267,10 +270,6 @@ function copyObject(source, res) {
 		}
 	}
 	return res;
-}
-
-function addLink (link, text=null, qsObj) {
-	
 }
 
 function capitalize(string) {
