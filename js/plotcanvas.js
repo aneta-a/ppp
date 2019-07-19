@@ -4,7 +4,7 @@ function PlotCanvas (initObj = {}, parent = document.body) {
 	this.scaleObj = copyObject(PlotCanvas.defaults);
 	copyObject(initObj, this.scaleObj);
 	this.canvas = document.createElement("canvas");
-	parent.appendChild(this.canvas);
+	if (parent) parent.appendChild(this.canvas);
 	this.canvas.setAttribute("width", this.scaleObj.width);
 	this.canvas.setAttribute("height", this.scaleObj.height);
 	
