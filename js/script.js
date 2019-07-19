@@ -1,7 +1,9 @@
 var colors = ["red", "green", "blue" , "magenta", "orange", "#00ccff", "#ffaa00", "#cccccc", "#aaaaaa", "#999999", "#666666", "#333333", "black"]
 var DefaultGetTau = "metallic";
+var wireHolePreferences = ["s4", "s3", "h6", "s5", "h8", "h10", "s6", "s8", "s10"];
 
-var cs, ctx, qs;
+
+var qs;
 var polyData;
 var curPoly = "Cuboctahedron";
 var curVF = "";
@@ -11,6 +13,8 @@ var defaultDPI = 96;
 var thickness = 0.5;//mm
 var previews3d = [];
 var previewColor = colors[1];
+var showWire = false;
+var wireSize = 6.0; //mm
 var sideMenu, mainPage;
 
 function pixelsToCm (arg, dpi = defaultDPI) {
@@ -34,6 +38,8 @@ function pageInit() {
 			previewColor = "#" + qs.color;
 		else previewColor = qs.color;
 	}
+	if (qs.hasOwnProperty("showWire")) showWire = getBool(qs.showWire);
+	if (qs.hasOwnProperty("wireSize")) wireSize = parseFloat(qs.wireSize);
 	//console.log("log colors " + qs.color + " " + previewColor);
 	readTemplateStyle();
 	
@@ -219,28 +225,49 @@ function createLinksList (polyData) {
 function addOptionsBlock (parent) {
 	var d = createDiv("optionsBlock", parent);
 	addP(d, "Options", "h2");
-	addOption(d, "color", "", previewColor);
-	addOption(d, "size", "(edge length in pixels)", edge);
-	addOption(d, "thickness", "of the material, mm", thickness);
+	addOption(d, "color", "Color&nbsp;", previewColor);
+	addOption(d, "size", "Edge length in pixels", edge);
+	addOption(d, "thickness", "Thickness of the material, mm", thickness);
+	var showWireChb = document.createElement("input");
+	showWireChb.setAttribute("type", "checkbox");
+	//showWireChb.setAttribute("id", "");
+	if (showWire) showWireChb.setAttribute("checked", "checked");
+	d.appendChild(showWireChb);
+	//var chbLabel = addP(d, "", "label");
+	//chbLabel.appendChild(showWireChb);
+	addP(d, "Generate templates with a hole for wire", "span");
+	var vs = addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
+	showElement(document.getElementById("wireSize_option"), showWire);
+	
+	showWireChb.onchange = function () {
+		console.log("onchange");
+		onOptionChanged("showWire", showWireChb.checked);
+		showElement(document.getElementById("wireSize_option"), showWireChb.checked);
+	}
+	
+	
 	addHideButton(d, "Options", "^", qs.hasOwnProperty("showOptions") ? getBool(qs.showOptions) : false);
 	
 }
 
-function addOption (parent, name, postfix, defaultValue) {
+function addOption (parent, name, description, defaultValue) {
 	var validNumberRegEx = "-?((\d*\.\d+)|(\d+))((e|E)-?\d+)?";
 	if (!defaultValue) defaultVaule = qs[name];
 	var d = createDiv("optionBlock", parent);
+	d.setAttribute("id", name+"_option");
 	var p =addP(d, "");
-	var pp = addP(p, capitalize(name) + "&nbsp;" + postfix, "span");
+	var pp = addP(p, description, "span");
 	var input = addP(p,"", "input");
 	if (name == "color") {
 		input.setAttribute("type", "color");
 		//TODO check browser support
 	} else {
 		input.setAttribute("type", "text");
+		//TODO pattern doesn't work
 		//input.setAttribute("pattern", validNumberRegEx);
 	}
 	input.setAttribute("value", defaultValue);
+	input.setAttribute("id", name + "_ui");
 	input.onchange = function () {
 		onOptionChanged(name, input.value);
 	}
@@ -310,6 +337,39 @@ function drawTemplates(templates, vf, polyName) {
 			
 		}
 		createTemplatesInfo(d, psvgData, i);
+		if (showWire) {
+			
+			var fTypes = getSortedFacesTypes(singleTemplates, vf);
+			
+			var minIndex = 100;
+			var prefType = "";
+			for (var it = 0; it < fTypes.length; it ++) {
+				var indInPrefs = wireHolePreferences.indexOf(fTypes[it]);
+				if (indInPrefs>=0 && indInPrefs < minIndex) {
+					minIndex = indInPrefs;
+					prefType = fTypes[it];
+				}
+			}
+			var wireFaceType = prefType ? parseInt(prefType.slice(1)) : vf.split(".")[0];
+			for (var j = 0; j < singleTemplates.length; j++) {
+				
+				var wireTemplateData = getSpiralTemplateData( singleTemplates[j], edge, {wire:  wireFaceType, wireRadius: cmToPixels(wireSize/20)});
+				if (wireTemplateData) {
+					var s = createDiv("templatePage", ddd); 
+					var psvg = new PlotSVG ({
+						id: singleTemplates[j] + "_" + i+ "_" + edge + "_wire", 
+						saveButton: true, 
+						saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) + " (wire)": " wire"), 
+						saveFileName: "ppp_" + curPoly.split(" ").join("_") +
+						 (templSets.length > 1 ? "_type" + (i+1) : "") + 
+						 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
+						 "_edge" + edge + "px_dpi" + defaultDPI + "_wire"}, s);
+					psvgData.push(drawSpiralTemplateImpl(psvg, wireTemplateData));
+				}
+				
+				
+			}
+		}
 		
 		addHideButton(dd, "Show templates", "Hide templates", false);
 		dd = createDiv("facesPreviewBlockContainer", d);
@@ -556,8 +616,39 @@ function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
 
 }
 
-function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 
+function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
+	var data = getSpiralTemplateData(type, size, options);
+	return drawSpiralTemplateImpl(psvg, data );
+}
+function drawSpiralTemplateImpl(psvg, data ) {
+	if (data) {
+			var angle = getMinAreaAngle(data.cutData, Math.sqrt(2));
+			data.cutData = rotateData(angle, data.cutData);
+			data.etchData = rotateData(angle, data.etchData);
+			data.circlesData = rotateData(angle,data.circlesData);
+			
+			var shft = psvg.setSizeByArrays(data.cutData.xs, data.cutData.ys);
+			//function shiftData(dx, dy, data, res) //utils.js
+			data.cutData = shiftData(-shft.xMin, -shft.yMin, data.cutData);
+			data.etchData = shiftData(-shft.xMin, -shft.yMin, data.etchData);
+			data.circlesData = shiftData(-shft.xMin, -shft.yMin, data.circlesData);
+			
+			//this.drawPolygon = function (xs, ys, options) { //plotsvg.js
+			var cutStyle = {class: "cut"};//"stroke:rgb(0,0,0);stroke-width:1.5;fill:none"};
+			var etchStyle = {class: "etch"};// "stroke:rgb(0,0,0);stroke-width:.5;fill:none"};
+			psvg.drawPolygon(data.cutData.xs, data.cutData.ys, cutStyle);
+			psvg.drawPolygon(data.etchData.xs, data.etchData.ys, etchStyle);
+			//console.log("circles", circlesData);
+			for (var i = 0; i < data.circlesData.xs.length; i++) {
+				psvg.drawCircle(data.circlesData.xs[i], data.circlesData.ys[i], data.circlesRadii[i], cutStyle);
+			}
+		
+	}
+	return psvg;
+}
+
+function getSpiralTemplateData(type, size = 100, options = {}){
 	var tObj = parseType(type);
 	var cutData = {xs:[], ys:[]};
 	var etchData = {xs:[], ys:[]};
@@ -565,11 +656,48 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 	var circlesRadii = [];
 	var circlesDelta = cmToPixels(thickness/20);
 	
-	function addCircle(data, N) {
+	var pinRadius = cmToPixels(0.3/10);
+	var wireRadius = cmToPixels(3/10);
+	if (options.hasOwnProperty("wireRadius")) wireRadius = options.wireRadius;
+	
+	
+	function addCircle(data, N, wire=false) {
 		circlesData.xs.push(data.xs[N]);
 		circlesData.ys.push(data.ys[N]);
-		circlesRadii.push(circlesDelta*(N-1));
+		if (wire) {
+			circlesRadii.push(wireRadius);
+			addPinCircles(data, N);
+		} else {
+			circlesRadii.push(circlesDelta*(N-1));
+		}
 	}
+	
+	function addPinCircles(data, N) {
+		var tau = getTau(N);
+		var t = getTransform ({x: 0, y:0 }, {x:1, y:0}, {x: data.xs[N], y: data.ys[N]}, {x: data.xs[0], y: data.ys[0]});
+		var p0 = getPinPoint(N, tau)
+		var p = transformPoint(p0, t.a, t.z0);
+		circlesData.xs.push(p.x);
+		circlesData.ys.push(p.y);
+		circlesRadii.push(pinRadius);
+		t = getTransform ({x: 0, y:0 }, {x:1, y:0}, {x: data.xs[N], y: data.ys[N]}, {x: data.xs[N+1], y: data.ys[N+1]});
+		p = transformPoint(p0, t.a, t.z0);
+		circlesData.xs.push(p.x);
+		circlesData.ys.push(p.y);
+		circlesRadii.push(pinRadius);
+		
+	}
+	function getPinPoint(N, tau) {
+		var s = Math.sin(2*Math.PI/N);
+		var c = Math.cos(2*Math.PI/N);
+		var t_2 = tau*s/(1-tau*c);
+		//var t_2 = tanPhi;//(Math.sqrt(tanPhi*tanPhi + 1) - 1)/tanPhi;
+		var c_2 = 1/Math.sqrt(t_2*t_2 + 1);
+		var s_2 = t_2*c_2;
+		return {x: 0.5*(1+tau - (1-tau)*c_2), y: 0.5*(1-tau)*s_2}
+	}
+	var wirePart = -1;
+	var addWire = options.hasOwnProperty("wire");
 	
 	switch (tObj.letters) {
 		case "s":
@@ -580,14 +708,27 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 			var p2 = {x: size, y: 0};
 			cutData = getTemplateData(p1, p2, tObj.numbers[0]);
 			var cutDataInv = getTemplateData(p2, p1, tObj.numbers[1]);
-			addCircle(cutData, tObj.numbers[0]);
-			addCircle(cutDataInv, tObj.numbers[1]);
+			if (addWire && options.wire == tObj.numbers[0]) {
+				wirePart = 0;
+			}
+			if (addWire && options.wire == tObj.numbers[1] && wirePart == -1) {
+				wirePart = 1;
+			}
+			
+			addCircle(cutData, tObj.numbers[0], wirePart == 0);
+			addCircle(cutDataInv, tObj.numbers[1], wirePart == 1);
 			cutData = concatPolyData(cutData, cutDataInv);
 			etchData = {xs: [p1.x, p2.x], ys: [p1.y, p2.y]};
 			break;
 		case "f":
 			var N = tObj.numbers[0];
 			if (tObj.numbers.length == 2) tObj.numbers.push(tObj.numbers[1]);
+			if (addWire && options.wire == tObj.numbers[1]) {
+				wirePart = 0;
+			}
+			if (addWire && options.wire == tObj.numbers[2] && wirePart == -1) {
+				wirePart = 1;
+			}
 			var R = size*0.5/Math.sin(Math.PI/N);
 			var p0 = {x:R, y:0};
 			etchData.xs.push(p0.x);
@@ -598,10 +739,12 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 				p0 = {x: p1.x, y: p1.y}
 				phi += 2*Math.PI/N;
 				p1 = {x: R*Math.cos(phi), y: R*Math.sin(phi)};
+				
 				etchData.xs.push(p1.x);
 				etchData.ys.push(p1.y);
 				var curCutData = getTemplateData(p1, p0, tObj.numbers[1+i%2]);
-				addCircle(curCutData, tObj.numbers[1+i%2]);
+				
+				addCircle(curCutData, tObj.numbers[1+i%2], wirePart == i);
 				cutData = concatPolyData(cutData, curCutData);
 			}
 			break;
@@ -622,6 +765,17 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 					etchData.ys[2] = 0; 
 					etchData.xs[3] = size*(1+Math.cos(2*Math.PI/tObj.numbers[0])); 
 					etchData.ys[3] = size*Math.sin(2*Math.PI/tObj.numbers[0]);
+					if (addWire) {
+						if (options.wire == tObj.numbers[0]) {
+							wirePart = 0;
+						} else if (options.wire == tObj.numbers[1]) {
+							wirePart = 3;
+						} else if (options.wire == tObj.numbers[2]) {
+							wirePart = 2;
+						} else if (options.wire == tObj.numbers[3]) {
+							wirePart = 1;
+						}
+					}
 					inds = [[1, 3, tObj.numbers[0]/2],[0, 1, tObj.numbers[3]], [2,0, tObj.numbers[2]/2],[3,2, tObj.numbers[1]],]; 
 					break;
 				case 3:
@@ -631,13 +785,23 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 					etchData.ys[1] = 0; 
 					etchData.xs[2] = size*(1+Math.cos(2*Math.PI/tObj.numbers[0])); 
 					etchData.ys[2] = size*Math.sin(2*Math.PI/tObj.numbers[0]);
+					if (addWire) {
+						if (options.wire == tObj.numbers[0]) {
+							wirePart = 0;
+						} else if (options.wire == tObj.numbers[1]) {
+							wirePart = 2;
+						} else if (options.wire == tObj.numbers[2]) {
+							wirePart = 1;
+						} 
+					}
+
 					inds = [[0, 2, tObj.numbers[0]/2],[1,0, tObj.numbers[2]],[2,1, tObj.numbers[1]]]; 
 			}
 			for (var i = 0; i < inds.length; i++) {
 				curCutData = getTemplateData({x: etchData.xs[inds[i][0]], y: etchData.ys[inds[i][0]]},
 											 {x: etchData.xs[inds[i][1]], y: etchData.ys[inds[i][1]]}, 
 											 inds[i][2]);
-				addCircle(curCutData, inds[i][2]);
+				addCircle(curCutData, inds[i][2], wirePart == i);
 
 				cutData = concatPolyData(cutData, curCutData);
 			}
@@ -657,38 +821,25 @@ function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
 			etchData.ys[4] = -size*Math.sqrt(3)*0.5;
 			etchData.xs[5] = size; 
 			etchData.ys[5] = 0;
+			if (addWire) {
+				if (options.wire == 3) wirePart = 0
+				else if (options.wire == tObj.numbers[0]) wirePart = 1;
+			}
 			for (var i = 1; i < 5; i++) {
 				var curN = i%2 ? 3 : tObj.numbers[0];
 				var curCutData = getTemplateData({x: etchData.xs[i+1], y: etchData.ys[i+1]}, 
 													{x: etchData.xs[i], y: etchData.ys[i]}, 
 													curN);
-				addCircle(curCutData, curN);
+				
+				addCircle(curCutData, curN, wirePart == i);
 				cutData = concatPolyData(cutData, curCutData);
 			}
 	}
 	
-	var angle = getMinAreaAngle(cutData, Math.sqrt(2));
-	cutData = rotateData(angle, cutData);
-	etchData = rotateData(angle, etchData);
-	circlesData = rotateData(angle,circlesData);
+	if (!(addWire && wirePart == -1))
+		return {cutData: cutData, etchData: etchData, circlesData: circlesData, circlesRadii: circlesRadii}
 	
-	var shft = psvg.setSizeByArrays(cutData.xs, cutData.ys);
-	//function shiftData(dx, dy, data, res) //utils.js
-	cutData = shiftData(-shft.xMin, -shft.yMin, cutData);
-	etchData = shiftData(-shft.xMin, -shft.yMin, etchData);
-	circlesData = shiftData(-shft.xMin, -shft.yMin, circlesData);
 	
-	//this.drawPolygon = function (xs, ys, options) { //plotsvg.js
-	var cutStyle = {class: "cut"};//"stroke:rgb(0,0,0);stroke-width:1.5;fill:none"};
-	var etchStyle = {class: "etch"};// "stroke:rgb(0,0,0);stroke-width:.5;fill:none"};
-	psvg.drawPolygon(cutData.xs, cutData.ys, cutStyle);
-	psvg.drawPolygon(etchData.xs, etchData.ys, etchStyle);
-	//console.log("circles", circlesData);
-	for (var i = 0; i < circlesData.xs.length; i++) {
-		psvg.drawCircle(circlesData.xs[i], circlesData.ys[i], circlesRadii[i], cutStyle);
-	}
-	
-	return psvg;
 
 }
 
@@ -697,8 +848,10 @@ function parseType (arg) {
 	var matches = /([a-z]+)(\d*)/g.exec(arg);
 	matches[2] = matches[2].replace(/10/g, "1");
 	var numbers = matches[2].split("");
-	for (var i = 0; i < numbers.length; i++)
+	for (var i = 0; i < numbers.length; i++){
 		if (numbers[i] == 1) numbers[i] = 10;
+		numbers[i] = parseInt(numbers[i]);
+	}
 	return {letters: matches[1], numbers: numbers};
 }
 
