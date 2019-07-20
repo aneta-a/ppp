@@ -7,7 +7,9 @@ var qs;
 var polyData;
 var curPoly = "Cuboctahedron";
 var curVF = "";
+var relativeDiameter = 0;//Diameter of the polyhedron with unit edge, data from the table
 var curTemplates = "";
+var templatePageSizes = [];
 var edge = 300;
 var defaultDPI = 96;
 var thickness = 0.5;//mm
@@ -26,7 +28,22 @@ function cmToPixels (arg, dpi = defaultDPI) {
 
 function pageInit() {
 	qs = parseQueryString();
+	setGlobalVars(qs);
 	
+	//console.log("log colors " + qs.color + " " + previewColor);
+	readTemplateStyle();
+	
+	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
+		showSideMenu();
+	
+	sideMenu = document.getElementById("list");
+	mainPage = document.getElementById("main");
+	readCSVData("templates.csv");
+	animate();
+	
+}
+
+function setGlobalVars (qs) {
 	if (qs.hasOwnProperty("size")) edge = qs.size;
 	if (qs.hasOwnProperty("edge")) edge = qs.edge;
 	var type = "s35";
@@ -40,17 +57,7 @@ function pageInit() {
 	}
 	if (qs.hasOwnProperty("showWire")) showWire = getBool(qs.showWire);
 	if (qs.hasOwnProperty("wireSize")) wireSize = parseFloat(qs.wireSize);
-	//console.log("log colors " + qs.color + " " + previewColor);
-	readTemplateStyle();
-	
-	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
-		showSideMenu();
-	
-	sideMenu = document.getElementById("list");
-	mainPage = document.getElementById("main");
-	readCSVData("templates.csv");
-	animate();
-	
+
 }
 
 //-----------Layout-------------------------
@@ -141,11 +148,9 @@ function onCSVRead (text) {
 		curPoly = polyData[curPolyInd][nameInd];
 		curTemplates = polyData[curPolyInd][templInd];
 		curVF = polyData[curPolyInd][vfInd];
+		relativeDiameter = polyData[curPolyInd][dInd];
 		curPoly = curPoly.charAt(0).toUpperCase() + curPoly.slice(1);
-		addP(d, curPoly, "h1");
-		addP(d,"Vertex figure: " + curVF + "");
-		addP(d,"Edge length: " + (Math.round(pixelsToCm(edge)*100)/100) + " cm");
-		addP(d,"Approximate diameter: " + (Math.round(pixelsToCm(edge*polyData[curPolyInd][dInd])*100)/100) + " cm");
+		fillDescription(d);
 		//d.innerHTML += "<p>Templates: " + curTemplates + "</p>";
 		
 		
@@ -163,41 +168,21 @@ function onCSVRead (text) {
 
 }
 
-function createTemplatesInfo(parent, templatesData, ind) {
-	var numberOfTemplatePages = templatesData.length;
-	var sizes = [];
-	for (var i = 0; i < templatesData.length; i++) {
-		
-		sizes.push({w: pixelsToCm(templatesData[i].svg.getAttribute("width")), 
-					h: pixelsToCm(templatesData[i].svg.getAttribute("height"))});
-	}
-	var d = createDiv("templatesInfo", parent);
-	addP(d, "Templates pages: " + numberOfTemplatePages, "span");
-	for (var i = 0; i < sizes.length; i++) {
-		addP(d, "&nbsp;&nbsp;" + Number(sizes[i].w).toFixed(1) + "&nbsp;x&nbsp;" + Number(sizes[i].h).toFixed(1) + "&nbsp;cm", "span");
-	}
-	var fitButton = document.createElement("button");
-		fitButton.innerHTML = "Fit in A4";
-		fitButton.sizesData = sizes.slice();
-		fitButton.setAttribute("id", "fitButton" + ind);
-		fitButton.onclick = function () {
-			var A4 = {w: 29.7, h: 21};
-			var maxFactor = 0;
-			for (var ii = 0; ii < fitButton.sizesData.length; ii++) {
-				
-				var factor = Math.max(fitButton.sizesData[ii].w/A4.w, fitButton.sizesData[ii].h/A4.h);
-				if (factor > maxFactor) maxFactor = factor;
-			}
-			
-			var newSize = Math.floor(edge/maxFactor);
-			//console.log(edge, maxFactor, newSize, fitButton.getAttribute("id"));
-			onOptionChanged("size", newSize);
-			
-		}
-		
-		parent.appendChild(fitButton);
+function fillDescription(d) {
+		addP(d, curPoly, "h1");
+		addP(d,"Vertex figure: " + curVF + "");
+		addP(d,"Edge length: " + pixelsToCm(edge).toFixed(2) + " cm");
+		addP(d,"Approximate diameter: " + pixelsToCm(edge*relativeDiameter).toFixed(1) + " cm");
+
 }
 
+function updateMainDescription() {
+	var d = document.getElementsByClassName("description")[0];
+	while(d.firstChild) d.removeChild(d.firstChild);
+	fillDescription(d);
+}
+
+//----------Controls--------------------------------------------------------------------
 function createLinksList (polyData) {
 	var list = createDiv("linksList", sideMenu);
 	list.setAttribute("id", "polyhedraList");
@@ -214,12 +199,31 @@ function createLinksList (polyData) {
 			var name = polyData[i][nameInd].charAt(0).toUpperCase() + polyData[i][nameInd].slice(1);
 			newQS.vf = polyData[i][vfInd];
 			var a = addP(addP(list, ""), name, "a");
+			a.setAttribute("class", "polyhedronLink");
 			a.setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
 		}
 	}
 	//addHideButton(node, showLabel = "show", hideLabel = "hide", showByDefault = true, parent = null)
 	addHideButton(list, "Polyhedra", "^", qs.hasOwnProperty("showList") ? getBool(qs.showList) : true);
 	addOptionsBlock(sideMenu);
+}
+
+function updateLinks(qs) {
+	var links = document.getElementsByClassName("polyhedronLink");
+	for (var i = 0; i < links.length; i++) {
+		var href = links[i].getAttribute("href");
+		var vfArr = /&vf=((\d+\.)+\d+)(&|$)/.exec(href);
+		
+		var vf = vfArr ? vfArr[1] : "";
+		var newQS = copyObject(qs);
+		if (newQS.hasOwnProperty("polyhedron")) delete newQS.polyhedron;
+		if (!newQS.hasOwnProperty("showSideMenu")) newQS.showSideMenu = true;
+		newQS.showList = true;
+		if (vf) 
+			newQS.vf = vf;
+		else delete newQS.vf;
+		links[i].setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
+	}
 }
 
 function addOptionsBlock (parent) {
@@ -230,17 +234,14 @@ function addOptionsBlock (parent) {
 	addOption(d, "thickness", "Thickness of the material, mm", thickness);
 	var showWireChb = document.createElement("input");
 	showWireChb.setAttribute("type", "checkbox");
-	//showWireChb.setAttribute("id", "");
 	if (showWire) showWireChb.setAttribute("checked", "checked");
 	d.appendChild(showWireChb);
-	//var chbLabel = addP(d, "", "label");
-	//chbLabel.appendChild(showWireChb);
 	addP(d, "Generate templates with a hole for wire", "span");
 	var vs = addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
 	showElement(document.getElementById("wireSize_option"), showWire);
 	
 	showWireChb.onchange = function () {
-		console.log("onchange");
+		
 		onOptionChanged("showWire", showWireChb.checked);
 		showElement(document.getElementById("wireSize_option"), showWireChb.checked);
 	}
@@ -276,18 +277,46 @@ function addOption (parent, name, description, defaultValue) {
 }
 
 function onOptionChanged(name, value) {
-	var newQS = copyObject(qs);
-	if (name == "color" && value.charAt(0) == "#") 
-		newQS.color = value.slice(1);
-	else 
-		newQS[name] = value;
-	newQS.showOptions = true; 
-	newQS.showList = isVisible(document.getElementById("polyhedraList"));
-	newQS.showSideMenu = true;
-	location.assign(location.href.split("?")[0] + "?" + createQueryString(newQS));
+	if (name == "color") {
+		if (value.charAt(0) == "#") qs.color = value.slice(1)
+		else qs.color = value;
+		for (var i = 0; i < previews3d.length; i++) {
+			updateMaterial(previews3d[i], {color: value});
+		}
+		updateFacesPreview({color: value});
+		previewColor = value;
+		console.log(qs.color);
+		updateLinks(qs);
+	} else if (name == "thickness" || name == "showWire" || name == "wireSize") {
+		qs[name] = value; 
+		setGlobalVars(qs);
+		updateTemplatePages();
+		updateLinks(qs);
+	} else if (name == "size") {
+		qs.size = value;
+		delete qs.edge;
+		setGlobalVars(qs);
+		updateFacesPreview({color: previewColor});
+		updateTemplatePages();
+		updateDescriptions();
+		updateLinks(qs);
+	} else {
+		console.log("option changed", name, qs, qs.color);
+		var newQS = copyObject(qs);
+		if (name == "color" && value.charAt(0) == "#") 
+			newQS.color = value.slice(1);
+		else 
+			newQS[name] = value;
+		newQS.showOptions = true; 
+		newQS.showList = isVisible(document.getElementById("polyhedraList"));
+		newQS.showSideMenu = true;
+		location.assign(location.href.split("?")[0] + "?" + createQueryString(newQS));
+	}
 }
+//-----------------------------------------------------------------------------------------
 
 
+//--------------------------Data--------------------------------------------------------
 function processVF (vfString) {
 	var vfArray = vfString.split(".");
 	var vfObjArray = [];
@@ -299,146 +328,6 @@ function processVF (vfString) {
 			finalStrings.push(finalString);
 	}
 	return finalStrings;//.join(".");
-}
-
-function drawTemplates(templates, vf, polyName) {
-	
-	var templSets = templates.split(" ");
-	var d0 = createDiv("typeBlocksContainer", mainPage);
-	for (var i = 0; i < templSets.length; i++) {
-		var d = createDiv("typeBlock", d0);
-		if (templSets.length > 1) {
-			addP(d, "Type " + (i+1), "h2");
-		}
-		var singleTemplates = templSets[i].split("+");
-		//function drawFacesPreview(parent, color, templatesArray) {
-		//addP(d, "3D preview", "h3");
-
-		var dd = createDiv("preview3dBlock", d);
-		
-		var ctx3d = create3DPreview(dd, previewColor, singleTemplates, vf, polyName);
-			
-		dd = createDiv("templatesPreviewBlockContainer", d);
-		addP(dd, "Templates","h3");
-		ddd = createDiv("templatesPreviewBlock", dd);
-		var psvgData = [];
-		for (var j = 0; j < singleTemplates.length; j++) {
-			var s = createDiv("templatePage", ddd);
-			var psvg = new PlotSVG ({
-				id: singleTemplates[j] + "_" + i+ "_" + edge, 
-				saveButton: true, 
-				saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) : ""), 
-				saveFileName: "ppp_" + curPoly.split(" ").join("_") +
-				 (templSets.length > 1 ? "_type" + (i+1) : "") + 
-				 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
-				 "_edge" + edge + "px_dpi" + defaultDPI}, s);
-			psvgData.push(drawSpiralTemplate(psvg, singleTemplates[j], edge));
-			
-			
-		}
-		createTemplatesInfo(d, psvgData, i);
-		if (showWire) {
-			
-			var fTypes = getSortedFacesTypes(singleTemplates, vf);
-			
-			var minIndex = 100;
-			var prefType = "";
-			for (var it = 0; it < fTypes.length; it ++) {
-				var indInPrefs = wireHolePreferences.indexOf(fTypes[it]);
-				if (indInPrefs>=0 && indInPrefs < minIndex) {
-					minIndex = indInPrefs;
-					prefType = fTypes[it];
-				}
-			}
-			var wireFaceType = prefType ? parseInt(prefType.slice(1)) : vf.split(".")[0];
-			for (var j = 0; j < singleTemplates.length; j++) {
-				
-				var wireTemplateData = getSpiralTemplateData( singleTemplates[j], edge, {wire:  wireFaceType, wireRadius: cmToPixels(wireSize/20)});
-				if (wireTemplateData) {
-					var s = createDiv("templatePage", ddd); 
-					var psvg = new PlotSVG ({
-						id: singleTemplates[j] + "_" + i+ "_" + edge + "_wire", 
-						saveButton: true, 
-						saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) + " (wire)": " wire"), 
-						saveFileName: "ppp_" + curPoly.split(" ").join("_") +
-						 (templSets.length > 1 ? "_type" + (i+1) : "") + 
-						 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
-						 "_edge" + edge + "px_dpi" + defaultDPI + "_wire"}, s);
-					psvgData.push(drawSpiralTemplateImpl(psvg, wireTemplateData));
-				}
-				
-				
-			}
-		}
-		
-		addHideButton(dd, "Show templates", "Hide templates", false);
-		dd = createDiv("facesPreviewBlockContainer", d);
-		addP(dd, "Faces preview", "h3");
-		var ddd = createDiv("facesPreviewBlock", dd);
-		drawFacesPreview(ddd, previewColor, singleTemplates);
-		addHideButton(dd, "Show faces preview", "Hide faces preview", false);
-		
-		
-			
-	}
-	return d0;
-}
-
-function create3DPreview(parent, color, templatesArray, vf, polyName){
-	var lp = null;
-	if (PlatonicSolids.hasOwnProperty(polyName.toLowerCase())) 
-		lp = PlatonicSolids[polyName.toLowerCase()].clone();
-	else if (ArchimedeanSolids.hasOwnProperty(polyName.toLowerCase().split(" ").join("_"))) 
-		lp = ArchimedeanSolids[polyName.toLowerCase().split(" ").join("_")];
-
-	if (lp) {
-		var textureCanvas = getTextureCanvas(null, color, templatesArray, vf).canvas;
-		var cs3d = document.createElement("canvas");
-		cs3d.setAttribute("class", "preview3d");
-		var ctx3d = createThreeContext(cs3d);
-		//return {renderer: renderer, scene: scene, camera: camera, controls: controls};
-		parent.appendChild(ctx3d.renderer.domElement);
-		
-		var texture = new THREE.CanvasTexture(textureCanvas);
-		var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
-		
-		var vfArr = processVF(vf);
-		var aspect = textureCanvas.width/textureCanvas.height;
-		if (vf == "3.4.4.4") {
-			lp.setGetUVFunction (function (faceInd, verInd){
-				var n = this.faces[faceInd].length;
-				var sh = n == 3 ? 0 : (faceInd < 14 ? 2 : 1);
-				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
-			});
-		} else if (vf == "3.3.3.3.4") {
-			lp.setGetUVFunction (function (faceInd, verInd){
-				var n = this.faces[faceInd].length;
-				var sh = n == 4 ? 2 : (faceInd < 14 ? 1 : 0);
-				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
-			});
-		}else if (vf == "3.3.3.3.5") {
-			lp.setGetUVFunction (function (faceInd, verInd){
-				var n = this.faces[faceInd].length;
-				var sh = n == 5 ? 2 : (faceInd < 32 ? 1 : 0);
-				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
-			});
-		} else {
-			lp.setGetUVFunction (function (faceInd, verInd){
-				var n = this.faces[faceInd].length;
-				var sh = 0;
-				for (var i = 0; i < vfArr.length; i++) {
-					if (Number(vfArr[i].split(":")[0]) == n) sh = i;
-				}
-				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
-			});
-		}
-		var geom = lp.getGeometry();
-		var poly3D = new THREE.Mesh(geom, mat);
-		ctx3d.scene.add(poly3D);
-		updateThreeContext (ctx3d);
-		previews3d.push(ctx3d);
-	
-	}
 }
 
 function getFacesTypes(templatesArray) {
@@ -547,105 +436,6 @@ function getSortedFacesTypes(templatesArray, vertexFigure) {
 			}
 		}
 		return faces;
-}
-
-function drawFacesPreview(parent, color, templatesArray) {
-	var types = getFacesTypes(templatesArray);
-	var maxN = 0;
-	for (var f in types)
-		if (Array.isArray(types[f]))
-			for (var i = 0; i < types[f].length; i++)
-				if (types[f][i] > maxN) maxN = types[f][i];
-	function getScale(N) {
-		return Math.sin(Math.PI/maxN)/Math.sin(Math.PI/N);
-	}
-	var maxSize = edge/Math.sin(Math.PI/maxN);
-	function getCanvas(scale) {
-		var w = maxSize * scale;
-		var cs = new PlotCanvas({width: w, height: w, minX: -scale, maxX: scale, minY: -scale, maxY: scale}, parent);
-		cs.canvas.setAttribute("class", "facePreview");
-		return cs;  
-	}
-	for (var i = 0; i < types.flat.length; i++) {
-		var n = Number(types.flat[i]);
-		var s = getScale(n);
-		drawEmptyFace(getCanvas(s), n, color, s);
-	}
-	for (var i = 0; i < types.halfSpiral.length; i++) {
-		var n = Number(types.halfSpiral[i]);
-		var s = getScale(n);
-		drawFacePolygonHalf(getCanvas(s), n, getTau(n/2),  color, s);
-	}
-	for (var i = 0; i < types.spiral.length; i++) {
-		
-		var n = Number(types.spiral[i]);
-		var s = getScale(n);
-		drawFacePolygon(getCanvas(s), n, getTau(n),  color, s);
-	}
-}
-
-function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
-	var types = getSortedFacesTypes(templatesArray, vertexFigure);
-	var typesHomo = types;
-	if (typesHomo.length > 0) {
-		var cHeight = 512;
-		var aspect = (typesHomo.length == 1 ? 1: (typesHomo.length == 2 ? 2 : 4));
-		var cWidth = aspect*cHeight;
-		var resCs = new PlotCanvas({width: cWidth, height: cHeight}, parent);
-		for (var i = 0; i < typesHomo.length; i++) {
-			resCs.setScale({minX: -1-2*i, maxX: 2*(aspect-i)-1});
-			var n = Number(typesHomo[i].slice(1));
-			switch (typesHomo[i].charAt(0)) {
-				case "s":
-					drawFacePolygon(resCs, n, getTau(n),  color, 1);
-					break;
-				case "f":
-					drawEmptyFace(resCs, n, color, 1);
-					break;
-				case "h":
-					drawFacePolygonHalf(resCs, n, getTau(n/2),  color, 1);
-					break;
-			}
-			
-		}
-		return resCs;
-	} else {
-		console.warn("Invalid face types set", templatesArray, types);
-		return null;
-	}
-
-}
-
-
-function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
-	var data = getSpiralTemplateData(type, size, options);
-	return drawSpiralTemplateImpl(psvg, data );
-}
-function drawSpiralTemplateImpl(psvg, data ) {
-	if (data) {
-			var angle = getMinAreaAngle(data.cutData, Math.sqrt(2));
-			data.cutData = rotateData(angle, data.cutData);
-			data.etchData = rotateData(angle, data.etchData);
-			data.circlesData = rotateData(angle,data.circlesData);
-			
-			var shft = psvg.setSizeByArrays(data.cutData.xs, data.cutData.ys);
-			//function shiftData(dx, dy, data, res) //utils.js
-			data.cutData = shiftData(-shft.xMin, -shft.yMin, data.cutData);
-			data.etchData = shiftData(-shft.xMin, -shft.yMin, data.etchData);
-			data.circlesData = shiftData(-shft.xMin, -shft.yMin, data.circlesData);
-			
-			//this.drawPolygon = function (xs, ys, options) { //plotsvg.js
-			var cutStyle = {class: "cut"};//"stroke:rgb(0,0,0);stroke-width:1.5;fill:none"};
-			var etchStyle = {class: "etch"};// "stroke:rgb(0,0,0);stroke-width:.5;fill:none"};
-			psvg.drawPolygon(data.cutData.xs, data.cutData.ys, cutStyle);
-			psvg.drawPolygon(data.etchData.xs, data.etchData.ys, etchStyle);
-			//console.log("circles", circlesData);
-			for (var i = 0; i < data.circlesData.xs.length; i++) {
-				psvg.drawCircle(data.circlesData.xs[i], data.circlesData.ys[i], data.circlesRadii[i], cutStyle);
-			}
-		
-	}
-	return psvg;
 }
 
 function getSpiralTemplateData(type, size = 100, options = {}){
@@ -907,6 +697,369 @@ function getMinAreaAngle(data, aspect=0) {
 	}
 	return angle;
 }
+
+
+//--------------------------------------------------------------------------------------
+
+//--------------------------Display------------------------------------------------------
+function drawTemplates(templates, vf, polyName) {
+	
+	var templSets = templates.split(" ");
+	var d0 = createDiv("typeBlocksContainer", mainPage);
+	for (var i = 0; i < templSets.length; i++) {
+		var d = createDiv("typeBlock", d0);
+		if (templSets.length > 1) {
+			addP(d, "Type " + (i+1), "h2");
+		}
+		var singleTemplates = templSets[i].split("+");
+		//function drawFacesPreview(parent, color, templatesArray) {
+		//addP(d, "3D preview", "h3");
+
+		var dd = createDiv("preview3dBlock", d);
+		
+		var ctx3d = create3DPreview(dd, previewColor, singleTemplates, vf, polyName);
+			
+		dd = createDiv("templatesPreviewBlockContainer", d);
+		addP(dd, "Templates","h3");
+		ddd = createDiv("templatesPreviewBlock", dd);
+		ddd.templates = singleTemplates.slice(0);
+		ddd.typeNum = i+1;
+		ddd.multiTypes = (templSets.length > 1);
+		// = [];
+		// generateTemplates(parent, options = {}, resObj = [])
+		var psvgData = generateTemplates(ddd)
+		createTemplatesInfo(d, psvgData, i+1);
+		if (showWire) {
+			
+			var fTypes = getSortedFacesTypes(singleTemplates, vf);
+			
+			var minIndex = 100;
+			var prefType = "";
+			for (var it = 0; it < fTypes.length; it ++) {
+				var indInPrefs = wireHolePreferences.indexOf(fTypes[it]);
+				if (indInPrefs>=0 && indInPrefs < minIndex) {
+					minIndex = indInPrefs;
+					prefType = fTypes[it];
+				}
+			}
+			var wireFaceType = prefType ? parseInt(prefType.slice(1)) : vf.split(".")[0];
+			ddd.wireFaceType = wireFaceType; 
+			psvgData = generateTemplates(ddd, {showWire: true}, psvgData);
+		}
+		
+		addHideButton(dd, "Show templates", "Hide templates", false);
+		dd = createDiv("facesPreviewBlockContainer", d);
+		addP(dd, "Faces preview", "h3");
+		var ddd = createDiv("facesPreviewBlock", dd);
+		ddd.templates = singleTemplates.slice(0);
+		drawFacesPreview(ddd, previewColor, singleTemplates);
+		addHideButton(dd, "Show faces preview", "Hide faces preview", false);
+		
+		
+			
+	}
+	return d0;
+}
+
+function generateTemplates(parent, options = {}, resObj = []) {
+	var ddd = parent;
+	var singleTemplates = ddd.templates;
+	if (options.showWire) {
+		for (var j = 0; j < singleTemplates.length; j++) {
+		
+			var wireTemplateData = getSpiralTemplateData( singleTemplates[j], edge, {wire:  ddd.wireFaceType, wireRadius: cmToPixels(wireSize/20)});
+			if (wireTemplateData) {
+				var s = createDiv("templatePage", ddd); 
+				var psvg = new PlotSVG ({
+					id: singleTemplates[j] + "_" + ddd.typeNum+ "_" + edge + "_wire", 
+					saveButton: true, 
+					saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) + " (wire)": " wire face template"), 
+					saveFileName: "ppp_" + curPoly.split(" ").join("_") +
+					 (ddd.multiTypes ? "_type" + ddd.typeNum : "") + 
+					 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
+					 "_edge" + edge + "px_dpi" + defaultDPI + "_wire"}, s);
+				resObj.push(drawSpiralTemplateImpl(psvg, wireTemplateData));
+			}
+		
+		
+		}
+	} else {
+		templatePageSizes[ddd.typeNum] = [];
+		for (var j = 0; j < singleTemplates.length; j++) {
+			var s = createDiv("templatePage", ddd);
+			var psvg = new PlotSVG ({
+				id: singleTemplates[j] + "_" + ddd.typeNum + "_" + edge, 
+				saveButton: true, 
+				saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) : ""), 
+				saveFileName: "ppp_" + curPoly.split(" ").join("_") +
+				 (ddd.multiTypes ? "_type" + ddd.typeNum : "") + 
+				 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
+				 "_edge" + edge + "px_dpi" + defaultDPI}, s);
+			resObj.push(drawSpiralTemplate(psvg, singleTemplates[j], edge));
+			templatePageSizes[ddd.typeNum].push({w: psvg.svg.getAttribute("width"), h: psvg.svg.getAttribute("height")});
+			
+			
+		}
+	}
+	return resObj;
+
+}
+function updateTemplatePages() {
+	var blocks = document.getElementsByClassName("templatesPreviewBlock");
+	for (var i = 0; i < blocks.length; i++) {
+		while (blocks[i].firstChild) blocks[i].removeChild(blocks[i].firstChild);
+		generateTemplates(blocks[i]);
+		if (showWire)
+			generateTemplates(blocks[i], {showWire: true});
+	}
+}
+
+function createTemplatesInfo(parent, templatesData, ind) {
+	var numberOfTemplatePages = templatesData.length;
+	/*var sizes = [];
+	for (var i = 0; i < templatesData.length; i++) {
+		
+		sizes.push({w: pixelsToCm(templatesData[i].svg.getAttribute("width")), 
+					h: pixelsToCm(templatesData[i].svg.getAttribute("height"))});
+	}*/
+	var sizes = templatePageSizes[ind].slice(0);
+	var d = createDiv("templatesInfo", parent);
+	d.pagesNum = numberOfTemplatePages;
+	d.typeNum = ind;
+	fillTemplateInfo(d);
+	var fitButton = document.createElement("button");
+		fitButton.innerHTML = "Fit in A4";
+		fitButton.sizesData = sizes.slice();
+		fitButton.setAttribute("id", "fitButton" + ind);
+		fitButton.onclick = function () {
+			var A4 = {w: 29.7, h: 21};
+			var maxFactor = 0;
+			for (var ii = 0; ii < fitButton.sizesData.length; ii++) {
+				
+				var factor = Math.max(pixelsToCm(Number(templatePageSizes[ind][ii].w))/A4.w, pixelsToCm(Number(templatePageSizes[ind][ii].h))/A4.h);
+				if (factor > maxFactor) maxFactor = factor;
+			}
+			
+			var newSize = Math.floor(edge/maxFactor);
+			//console.log(edge, maxFactor, newSize, fitButton.getAttribute("id"));
+			document.getElementById("size_ui").value= newSize;
+			onOptionChanged("size", newSize);
+			
+		}
+		
+		parent.appendChild(fitButton);
+}
+
+function fillTemplateInfo(d) {
+	var sizes = templatePageSizes[d.typeNum].slice(0);
+
+	addP(d, "Templates pages:&nbsp;" + d.pagesNum +" ", "span");
+	for (var i = 0; i < sizes.length; i++) {
+		addP(d, "&nbsp;" + pixelsToCm(Number(sizes[i].w)).toFixed(1) + "&nbsp;x&nbsp;" + pixelsToCm(Number(sizes[i].h)).toFixed(1) + "&nbsp;cm ", "span");
+	}
+}
+
+function updateDescriptions(){
+	updateMainDescription();
+	var blocks = document.getElementsByClassName("templatesInfo");
+	for (var i = 0; i < blocks.length; i++) {
+		clearNode(blocks[i]);
+		fillTemplateInfo(blocks[i]);
+	}
+	
+};
+
+
+function create3DPreview(parent, color, templatesArray, vf, polyName){
+	var lp = null;
+	if (PlatonicSolids.hasOwnProperty(polyName.toLowerCase())) 
+		lp = PlatonicSolids[polyName.toLowerCase()].clone();
+	else if (ArchimedeanSolids.hasOwnProperty(polyName.toLowerCase().split(" ").join("_"))) 
+		lp = ArchimedeanSolids[polyName.toLowerCase().split(" ").join("_")];
+
+	if (lp) {
+		var cs3d = document.createElement("canvas");
+		cs3d.setAttribute("class", "preview3d");
+		var ctx3d = createThreeContext(cs3d);
+		//return {renderer: renderer, scene: scene, camera: camera, controls: controls};
+		parent.appendChild(ctx3d.renderer.domElement);
+		
+		ctx3d.templates = templatesArray.slice(0);
+		ctx3d.vf = vf;
+
+		var textureCanvas = getTextureCanvas(null, color, templatesArray, vf).canvas;
+		var texture = new THREE.CanvasTexture(textureCanvas);
+		var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
+		
+		var vfArr = processVF(vf);
+		var aspect = textureCanvas.width/textureCanvas.height;
+		if (vf == "3.4.4.4") {
+			lp.setGetUVFunction (function (faceInd, verInd){
+				var n = this.faces[faceInd].length;
+				var sh = n == 3 ? 0 : (faceInd < 14 ? 2 : 1);
+				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
+			});
+		} else if (vf == "3.3.3.3.4") {
+			lp.setGetUVFunction (function (faceInd, verInd){
+				var n = this.faces[faceInd].length;
+				var sh = n == 4 ? 2 : (faceInd < 14 ? 1 : 0);
+				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
+			});
+		}else if (vf == "3.3.3.3.5") {
+			lp.setGetUVFunction (function (faceInd, verInd){
+				var n = this.faces[faceInd].length;
+				var sh = n == 5 ? 2 : (faceInd < 32 ? 1 : 0);
+				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
+			});
+		} else {
+			lp.setGetUVFunction (function (faceInd, verInd){
+				var n = this.faces[faceInd].length;
+				var sh = 0;
+				for (var i = 0; i < vfArr.length; i++) {
+					if (Number(vfArr[i].split(":")[0]) == n) sh = i;
+				}
+				return new THREE.Vector2((0.5*(1+Math.cos(verInd*Math.PI*2/n))+sh)/aspect, 0.5*(1+Math.sin(verInd*Math.PI*2/n)));
+			});
+		}
+		var geom = lp.getGeometry();
+		var poly3D = new THREE.Mesh(geom, mat);
+		ctx3d.scene.add(poly3D);
+		ctx3d.poly3D = poly3D;
+		updateThreeContext (ctx3d);
+		previews3d.push(ctx3d);
+	
+	}
+}
+
+function updateMaterial (ctx3d, options) {
+	if (options.hasOwnProperty("color")) {
+		var textureCanvas = getTextureCanvas(null, options.color, ctx3d.templates, ctx3d.vf).canvas;
+		var texture = new THREE.CanvasTexture(textureCanvas);
+		ctx3d.poly3D.material.map = texture;
+		ctx3d.poly3D.material.needsUpdate = true;
+		updateThreeContext(ctx3d);
+		//var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
+	}
+}
+
+function updateFacesPreview(options) {
+	//drawFacesPreview(parent, color, templatesArray)
+	
+	/* 
+			var ddd = createDiv("facesPreviewBlock", dd);
+		ddd.templates = singleTemplates.slice(0);
+		drawFacesPreview(ddd, previewColor, singleTemplates);
+
+	*/
+	if (options.hasOwnProperty("color")) {
+		var blocks = document.getElementsByClassName("facesPreviewBlock");
+		for (var i = 0; i < blocks.length; i++) {
+			while (blocks[i].firstChild) blocks[i].removeChild(blocks[i].firstChild);
+			drawFacesPreview(blocks[i], options.color, blocks[i].templates);
+		}
+	}
+}
+
+
+function drawFacesPreview(parent, color, templatesArray) {
+	var types = getFacesTypes(templatesArray);
+	var maxN = 0;
+	for (var f in types)
+		if (Array.isArray(types[f]))
+			for (var i = 0; i < types[f].length; i++)
+				if (types[f][i] > maxN) maxN = types[f][i];
+	function getScale(N) {
+		return Math.sin(Math.PI/maxN)/Math.sin(Math.PI/N);
+	}
+	var maxSize = edge/Math.sin(Math.PI/maxN);
+	function getCanvas(scale) {
+		var w = maxSize * scale;
+		var cs = new PlotCanvas({width: w, height: w, minX: -scale, maxX: scale, minY: -scale, maxY: scale}, parent);
+		cs.canvas.setAttribute("class", "facePreview");
+		return cs;  
+	}
+	for (var i = 0; i < types.flat.length; i++) {
+		var n = Number(types.flat[i]);
+		var s = getScale(n);
+		drawEmptyFace(getCanvas(s), n, color, s);
+	}
+	for (var i = 0; i < types.halfSpiral.length; i++) {
+		var n = Number(types.halfSpiral[i]);
+		var s = getScale(n);
+		drawFacePolygonHalf(getCanvas(s), n, getTau(n/2),  color, s);
+	}
+	for (var i = 0; i < types.spiral.length; i++) {
+		
+		var n = Number(types.spiral[i]);
+		var s = getScale(n);
+		drawFacePolygon(getCanvas(s), n, getTau(n),  color, s);
+	}
+}
+
+function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
+	var types = getSortedFacesTypes(templatesArray, vertexFigure);
+	var typesHomo = types;
+	if (typesHomo.length > 0) {
+		var cHeight = 512;
+		var aspect = (typesHomo.length == 1 ? 1: (typesHomo.length == 2 ? 2 : 4));
+		var cWidth = aspect*cHeight;
+		var resCs = new PlotCanvas({width: cWidth, height: cHeight}, parent);
+		for (var i = 0; i < typesHomo.length; i++) {
+			resCs.setScale({minX: -1-2*i, maxX: 2*(aspect-i)-1});
+			var n = Number(typesHomo[i].slice(1));
+			switch (typesHomo[i].charAt(0)) {
+				case "s":
+					drawFacePolygon(resCs, n, getTau(n),  color, 1);
+					break;
+				case "f":
+					drawEmptyFace(resCs, n, color, 1);
+					break;
+				case "h":
+					drawFacePolygonHalf(resCs, n, getTau(n/2),  color, 1);
+					break;
+			}
+			
+		}
+		return resCs;
+	} else {
+		console.warn("Invalid face types set", templatesArray, types);
+		return null;
+	}
+
+}
+
+
+function drawSpiralTemplate(psvg, type, size = 100, options = {}) {
+	var data = getSpiralTemplateData(type, size, options);
+	return drawSpiralTemplateImpl(psvg, data );
+}
+function drawSpiralTemplateImpl(psvg, data ) {
+	if (data) {
+			var angle = getMinAreaAngle(data.cutData, Math.sqrt(2));
+			data.cutData = rotateData(angle, data.cutData);
+			data.etchData = rotateData(angle, data.etchData);
+			data.circlesData = rotateData(angle,data.circlesData);
+			
+			var shft = psvg.setSizeByArrays(data.cutData.xs, data.cutData.ys);
+			//function shiftData(dx, dy, data, res) //utils.js
+			data.cutData = shiftData(-shft.xMin, -shft.yMin, data.cutData);
+			data.etchData = shiftData(-shft.xMin, -shft.yMin, data.etchData);
+			data.circlesData = shiftData(-shft.xMin, -shft.yMin, data.circlesData);
+			
+			//this.drawPolygon = function (xs, ys, options) { //plotsvg.js
+			var cutStyle = {class: "cut"};//"stroke:rgb(0,0,0);stroke-width:1.5;fill:none"};
+			var etchStyle = {class: "etch"};// "stroke:rgb(0,0,0);stroke-width:.5;fill:none"};
+			psvg.drawPolygon(data.cutData.xs, data.cutData.ys, cutStyle);
+			psvg.drawPolygon(data.etchData.xs, data.etchData.ys, etchStyle);
+			//console.log("circles", circlesData);
+			for (var i = 0; i < data.circlesData.xs.length; i++) {
+				psvg.drawCircle(data.circlesData.xs[i], data.circlesData.ys[i], data.circlesRadii[i], cutStyle);
+			}
+		
+	}
+	return psvg;
+}
+//-----------------------------------------------------------------------------------------------------
 
 function animate()
 {
