@@ -40,6 +40,11 @@ function isVisible(node) {
 	
 }
 
+function clearNode(node) {
+	while(node.firstChild) node.removeChild(node.firstChild);
+	return node;
+}
+
 function createQueryString(object) {
 	var res = [];
 	for (var f in object) 
