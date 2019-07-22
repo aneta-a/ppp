@@ -1178,6 +1178,38 @@ var ArchimedeanSolids = {};
 	var cosSh = (snubDodeR3-snubDodeR5*c35)/(0.5*s35/Math.sin(Math.PI/5));
 	this.snub_dodecahedron = PlatonicSolids.dodecahedron.snub(Math.acos(cosSh), snubDodeShift);
 	
+	this.prism = function (n, anti = false) {
+		var vertices = [];
+		var faces = [[], []];
+		var s = Math.sin(Math.PI/n);
+		var c = Math.cos(Math.PI/n);
+		var z = anti? Math.sqrt(s*s+0.5*c-0.5) : s; 
+		var c2 = 1 - 2*s*s;
+		var s2 = 2*s*c;
+		var x_ = 1, y_ = 0;
+		var x = x_, y = y_;
+		for (var i = 0; i < n; i++) {
+			vertices.push(new THREE.Vector3(x, y, z), anti ? new THREE.Vector3(x*c-y*s, x*s+y*c, -z) : new THREE.Vector3(x, y, -z));
+			faces[0].push(2*i);
+			faces[1].push(2*i+1);
+			if (anti) {
+				faces.push([2*i, 2*i+1, (2*i+2)%(2*n)], [2*i+1, (2*i+3)%(2*n), (2*i+2)%(2*n)]);
+			} else {
+				faces.push([2*i, 2*i+1, (2*i+3)%(2*n), (2*i+2)%(2*n)]);
+			}
+			x_ = x;
+			y_ = y;
+			x = c2*x_ - s2*y_;
+			y = s2*x_ + c2*y_;
+		}
+		return new LogicalPolyhedron(vertices, faces);
+	
+	}; 
+	this.antiprism = function (n) {
+		return this.prism(n, true);
+	}
+	
+	
 }).apply(ArchimedeanSolids);
 
 //------------------Regular polytopes---------------------------------------------------
