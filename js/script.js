@@ -123,13 +123,26 @@ function onCSVRead (text) {
 	var dInd = polyData[0].indexOf("Diameter");
 	var curPolyInd = -1;
 	
-
+	var d = createDiv("description", mainPage);
+	var prism = false;
 	if (qs.hasOwnProperty("vf")) {
-		for (var i = 1; i < polyData.length; i++) {
-			if (polyData[i][vfInd] == qs.vf) {
-				curPolyInd = i;
+		var prismMatches = /^(4\.){2}([5-9]|(\d{2}))$/.exec(qs.vf);
+		var antiprismMatches = /^(3\.){3}([4-9]|(\d{2}))$/.exec(qs.vf);
+		if (prismMatches || antiprismMatches) {
+			prism = true;
+			curPoly = prismMatches ? "Uniform prism" : "Uniform antiprism";
+			curVF = qs.vf;
+			curPolyObject = getPolyObjectByVF(curVF);
+			fillDescription(d);
+			var templatesNode = drawTemplates(curPolyObject.templates, curVF, curPoly);
+			
+		} else {
+			for (var i = 1; i < polyData.length; i++) {
+				if (polyData[i][vfInd] == qs.vf) {
+					curPolyInd = i;
+				}
+					
 			}
-				
 		}
 	} else {
 		for (var i = 1; i < polyData.length; i++) {
@@ -141,7 +154,6 @@ function onCSVRead (text) {
 		}
 	}
 		createLinksList(polyData);
-		var d = createDiv("description", mainPage);
 	
 	
 	if (curPolyInd > 0) {	
@@ -151,7 +163,7 @@ function onCSVRead (text) {
 		curPolyObject = getPolyObjectByVF(curVF);
 		fillDescription(d);
 		var templatesNode = drawTemplates(curPolyObject.templates, curVF, curPoly);
-	} else {
+	} else if (!prism) {
 		var warnStr = "Invalid polyhedron name or vertex figure " + qs.polyhedron + " " + qs.vf;
 		console.warn(warnStr);
 		addP(d, warnStr);
@@ -216,16 +228,28 @@ function createLinksList (polyData) {
 	var vInd = polyData[0].indexOf("V");
 	addP(list, "Polyhedra", "h2");
 	
-	for (var i = 1; i < polyData.length; i++) {
-		if (polyData[i][nameInd]) {
-			var name = polyData[i][nameInd].charAt(0).toUpperCase() + polyData[i][nameInd].slice(1);
-			newQS.vf = polyData[i][vfInd];
+	function createLink (name, vf) {
+			newQS.vf = vf;
 			var a = addP(addP(list, ""), name, "a");
 			a.setAttribute("class", "polyhedronLink");
 			a.setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
+			return a;	
+	}
+	
+	for (var i = 1; i < polyData.length; i++) {
+		if (polyData[i][nameInd]) {
+			var name = polyData[i][nameInd].charAt(0).toUpperCase() + polyData[i][nameInd].slice(1);
+			//newQS.vf = polyData[i][vfInd];
+			createLink(name, polyData[i][vfInd]);
+			//var a = addP(addP(list, ""), name, "a");
+			//a.setAttribute("class", "polyhedronLink");
+			//a.setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
 			//console.log(getPolyObjectByVF(polyData[i][vfInd]), "e=" + polyData[i][eInd],"v=" + polyData[i][vInd]);
 		}
 	}
+	createLink("Uniform prism", "4.4.7");
+	createLink("Uniform antiprism", "3.3.3.8");
+	
 	//addHideButton(node, showLabel = "show", hideLabel = "hide", showByDefault = true, parent = null)
 	addHideButton(list, "Polyhedra", "^", qs.hasOwnProperty("showList") ? getBool(qs.showList) : true);
 	addOptionsBlock(sideMenu);
@@ -255,6 +279,9 @@ function addOptionsBlock (parent) {
 	addOption(d, "color", "Color&nbsp;", previewColor);
 	addOption(d, "size", "Edge length in pixels", edge);
 	addOption(d, "thickness", "Thickness of the material, mm", thickness);
+	if (curPoly.toLowerCase().split(" ")[0] == "uniform") {
+		addOption(d, "baseVertices", "Number of vertices in base", curVF.split(".").slice(-1)[0]);
+	}
 	var showWireChb = document.createElement("input");
 	showWireChb.setAttribute("type", "checkbox");
 	if (showWire) showWireChb.setAttribute("checked", "checked");
@@ -326,6 +353,11 @@ function onOptionChanged(name, value) {
 		var newQS = copyObject(qs);
 		if (name == "color" && value.charAt(0) == "#") 
 			newQS.color = value.slice(1);
+		else if (name == "baseVertices") {
+			var newvfArr = newQS.vf.split(".");
+			newvfArr.splice(-1, 1, value);
+			newQS.vf = newvfArr.join(".");
+		}
 		else 
 			newQS[name] = value;
 		newQS.showOptions = true; 
@@ -657,10 +689,17 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 function parseType (arg) {
 	arg = arg.toLowerCase();
 	var matches = /([a-z]+)(\d*)/g.exec(arg);
-	matches[2] = matches[2].replace(/10/g, "1");
+	//matches[2] = matches[2].replace(/10/g, "1");
 	var numbers = matches[2].split("");
+	var j = 0;
+	while (j < numbers.length-1) {
+		if (numbers[j] == "1" || numbers[j] == "2") {
+			var num = numbers[j] + numbers[j+1];
+			numbers.splice(j, 2, num);
+		} else j++;
+	}
 	for (var i = 0; i < numbers.length; i++){
-		if (numbers[i] == 1) numbers[i] = 10;
+		//if (numbers[i] == 1) numbers[i] = 10;
 		numbers[i] = parseInt(numbers[i]);
 	}
 	return {letters: matches[1], numbers: numbers};
@@ -966,6 +1005,7 @@ function getPolyObjectByVF(vf) {
 	function getHSTemplate(i, double) {
 		var resStr = "hs";
 		var hsCount = res["E" + vfObjs[i].nexts_s[0] + vfObjs[i].n_s];
+		if (!double && vfObjs[i].nexts[0] == vfObjs[i].nexts[1]) hsCount /= 2;
 		var sEdges = []; 
 		if (!double) {
 			resStr += vfObjs[i].n_s + vfObjs[i].nexts_s.join("");
@@ -1079,10 +1119,16 @@ function getPolyObjectByVF(vf) {
 
 function create3DPreview(parent, color, templatesArray, vf, polyName){
 	var lp = null;
+	console.log(polyName);
 	if (PlatonicSolids.hasOwnProperty(polyName.toLowerCase())) 
 		lp = PlatonicSolids[polyName.toLowerCase()].clone();
 	else if (ArchimedeanSolids.hasOwnProperty(polyName.toLowerCase().split(" ").join("_"))) 
 		lp = ArchimedeanSolids[polyName.toLowerCase().split(" ").join("_")];
+	else if (polyName.toLowerCase() == "uniform prism") {
+		lp = ArchimedeanSolids.prism(parseInt(vf.split(".")[2]))
+	} else if (polyName.toLowerCase() == "uniform antiprism") {
+		lp = ArchimedeanSolids.antiprism(parseInt(vf.split(".")[3]))
+	}
 
 	if (lp) {
 		var cs3d = document.createElement("canvas");
