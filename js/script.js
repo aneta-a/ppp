@@ -6,9 +6,10 @@ var wireHolePreferences = ["s4", "s3", "h6", "s5", "h8", "h10", "s6", "s8", "s10
 var qs;
 var polyData;
 var curPoly = "Cuboctahedron";
+var curPolyObject = {};
 var curVF = "";
-var relativeDiameter = 0;//Diameter of the polyhedron with unit edge, data from the table
-var curTemplates = "";
+//var relativeDiameter = 0;//Diameter of the polyhedron with unit edge, data from the table
+//var curTemplates = "";
 var templatePageSizes = [];
 var edge = 300;
 var defaultDPI = 96;
@@ -27,10 +28,9 @@ function cmToPixels (arg, dpi = defaultDPI) {
 }
 
 function pageInit() {
+
 	qs = parseQueryString();
 	setGlobalVars(qs);
-	
-	//console.log("log colors " + qs.color + " " + previewColor);
 	readTemplateStyle();
 	
 	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
@@ -142,19 +142,15 @@ function onCSVRead (text) {
 	}
 		createLinksList(polyData);
 		var d = createDiv("description", mainPage);
-		
+	
 	
 	if (curPolyInd > 0) {	
 		curPoly = polyData[curPolyInd][nameInd];
-		curTemplates = polyData[curPolyInd][templInd];
 		curVF = polyData[curPolyInd][vfInd];
-		relativeDiameter = polyData[curPolyInd][dInd];
-		curPoly = curPoly.charAt(0).toUpperCase() + curPoly.slice(1);
+		curPoly = capitalize(curPoly);
+		curPolyObject = getPolyObjectByVF(curVF);
 		fillDescription(d);
-		//d.innerHTML += "<p>Templates: " + curTemplates + "</p>";
-		
-		
-		var templatesNode = drawTemplates(curTemplates, curVF, curPoly);
+		var templatesNode = drawTemplates(curPolyObject.templates, curVF, curPoly);
 	} else {
 		var warnStr = "Invalid polyhedron name or vertex figure " + qs.polyhedron + " " + qs.vf;
 		console.warn(warnStr);
@@ -163,16 +159,40 @@ function onCSVRead (text) {
 		showSideMenu();
 		
 	}
+}
 
-	
+function checkTemplates(data, vfInd, templInd) {
+	for (var i = 1; i < data.length; i++) {
+		if (data[i][vfInd]) {
+			var vf = data[i][vfInd];
+			var templatesString = data[i][templInd];
+			
+			var templatesObj = getPolyObjectByVF(vf).templates;
+			if (templatesString.split(" ").length != templatesObj.length) 
+				console.warn(vf, "Different length: ", templatesString.split(" ").length, templatesObj.length);
+			console.log(getTemplatesStringFromObj(templatesObj), "|", templatesString);
+			
+		}
+	}
+}
 
+function getTemplatesStringFromObj(obj) {
+	var resArr = [];
+	for (var i = 0; i < obj.length; i++) {
+		var singleArr = [];
+		for (var j = 0; j < obj[i].length; j++) {
+			singleArr.push(obj[i][j].type);
+		}
+		resArr.push(singleArr.join("+"));
+	}
+	return resArr.join(" ");
 }
 
 function fillDescription(d) {
 		addP(d, curPoly, "h1");
 		addP(d,"Vertex figure: " + curVF + "");
 		addP(d,"Edge length: " + pixelsToCm(edge).toFixed(2) + " cm");
-		addP(d,"Approximate diameter: " + pixelsToCm(edge*relativeDiameter).toFixed(1) + " cm");
+		addP(d,"Approximate diameter: " + pixelsToCm(edge*curPolyObject.diameter).toFixed(1) + " cm");
 
 }
 
@@ -192,6 +212,8 @@ function createLinksList (polyData) {
 	newQS.showList = true;
 	var nameInd = polyData[0].indexOf("Name");
 	var vfInd = polyData[0].indexOf("Vertex figure");
+	var eInd = polyData[0].indexOf("E");
+	var vInd = polyData[0].indexOf("V");
 	addP(list, "Polyhedra", "h2");
 	
 	for (var i = 1; i < polyData.length; i++) {
@@ -201,6 +223,7 @@ function createLinksList (polyData) {
 			var a = addP(addP(list, ""), name, "a");
 			a.setAttribute("class", "polyhedronLink");
 			a.setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
+			//console.log(getPolyObjectByVF(polyData[i][vfInd]), "e=" + polyData[i][eInd],"v=" + polyData[i][vInd]);
 		}
 	}
 	//addHideButton(node, showLabel = "show", hideLabel = "hide", showByDefault = true, parent = null)
@@ -285,7 +308,6 @@ function onOptionChanged(name, value) {
 		}
 		updateFacesPreview({color: value});
 		previewColor = value;
-		console.log(qs.color);
 		updateLinks(qs);
 	} else if (name == "thickness" || name == "showWire" || name == "wireSize") {
 		qs[name] = value; 
@@ -301,7 +323,6 @@ function onOptionChanged(name, value) {
 		updateDescriptions();
 		updateLinks(qs);
 	} else {
-		console.log("option changed", name, qs, qs.color);
 		var newQS = copyObject(qs);
 		if (name == "color" && value.charAt(0) == "#") 
 			newQS.color = value.slice(1);
@@ -481,13 +502,13 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 		var s = Math.sin(2*Math.PI/N);
 		var c = Math.cos(2*Math.PI/N);
 		var t_2 = tau*s/(1-tau*c);
-		//var t_2 = tanPhi;//(Math.sqrt(tanPhi*tanPhi + 1) - 1)/tanPhi;
 		var c_2 = 1/Math.sqrt(t_2*t_2 + 1);
 		var s_2 = t_2*c_2;
 		return {x: 0.5*(1+tau - (1-tau)*c_2), y: 0.5*(1-tau)*s_2}
 	}
 	var wirePart = -1;
 	var addWire = options.hasOwnProperty("wire");
+	//if (addWire) console.log(options, type);
 	
 	switch (tObj.letters) {
 		case "s":
@@ -498,10 +519,10 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 			var p2 = {x: size, y: 0};
 			cutData = getTemplateData(p1, p2, tObj.numbers[0]);
 			var cutDataInv = getTemplateData(p2, p1, tObj.numbers[1]);
-			if (addWire && options.wire == tObj.numbers[0]) {
+			if (addWire && options.wire == tObj.numbers[0] && options.next == tObj.numbers[1]) {
 				wirePart = 0;
 			}
-			if (addWire && options.wire == tObj.numbers[1] && wirePart == -1) {
+			if (addWire && options.wire == tObj.numbers[1] && options.next == tObj.numbers[0] && wirePart == -1) {
 				wirePart = 1;
 			}
 			
@@ -513,10 +534,10 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 		case "f":
 			var N = tObj.numbers[0];
 			if (tObj.numbers.length == 2) tObj.numbers.push(tObj.numbers[1]);
-			if (addWire && options.wire == tObj.numbers[1]) {
+			if (addWire && options.wire == tObj.numbers[1] && options.next == tObj.numbers[0]) {
 				wirePart = 0;
 			}
-			if (addWire && options.wire == tObj.numbers[2] && wirePart == -1) {
+			if (addWire && options.wire == tObj.numbers[2] && options.next == tObj.numbers[0] && wirePart == -1) {
 				wirePart = 1;
 			}
 			var R = size*0.5/Math.sin(Math.PI/N);
@@ -556,13 +577,13 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 					etchData.xs[3] = size*(1+Math.cos(2*Math.PI/tObj.numbers[0])); 
 					etchData.ys[3] = size*Math.sin(2*Math.PI/tObj.numbers[0]);
 					if (addWire) {
-						if (options.wire == tObj.numbers[0]) {
+						if (options.wire == tObj.numbers[0] && options.next == tObj.numbers[1] ) {
 							wirePart = 0;
-						} else if (options.wire == tObj.numbers[1]) {
+						} else if (options.wire == tObj.numbers[1] && options.next == tObj.numbers[0]) {
 							wirePart = 3;
-						} else if (options.wire == tObj.numbers[2]) {
+						} else if (options.wire == tObj.numbers[2] && options.next == tObj.numbers[3]) {
 							wirePart = 2;
-						} else if (options.wire == tObj.numbers[3]) {
+						} else if (options.wire == tObj.numbers[3] && options.next == tObj.numbers[2]) {
 							wirePart = 1;
 						}
 					}
@@ -576,11 +597,11 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 					etchData.xs[2] = size*(1+Math.cos(2*Math.PI/tObj.numbers[0])); 
 					etchData.ys[2] = size*Math.sin(2*Math.PI/tObj.numbers[0]);
 					if (addWire) {
-						if (options.wire == tObj.numbers[0]) {
+						if (options.wire == tObj.numbers[0] && options.next == tObj.numbers[1]) {
 							wirePart = 0;
-						} else if (options.wire == tObj.numbers[1]) {
+						} else if (options.wire == tObj.numbers[1] && options.next == tObj.numbers[0]) {
 							wirePart = 2;
-						} else if (options.wire == tObj.numbers[2]) {
+						} else if (options.wire == tObj.numbers[2] && options.next == tObj.numbers[0]) {
 							wirePart = 1;
 						} 
 					}
@@ -612,8 +633,8 @@ function getSpiralTemplateData(type, size = 100, options = {}){
 			etchData.xs[5] = size; 
 			etchData.ys[5] = 0;
 			if (addWire) {
-				if (options.wire == 3) wirePart = 0
-				else if (options.wire == tObj.numbers[0]) wirePart = 1;
+				if (options.wire == 3) wirePart = 1
+				else if (options.wire == tObj.numbers[0]) wirePart = 2;
 			}
 			for (var i = 1; i < 5; i++) {
 				var curN = i%2 ? 3 : tObj.numbers[0];
@@ -702,16 +723,21 @@ function getMinAreaAngle(data, aspect=0) {
 //--------------------------------------------------------------------------------------
 
 //--------------------------Display------------------------------------------------------
-function drawTemplates(templates, vf, polyName) {
+function drawTemplates(templSets, vf, polyName) {
 	
-	var templSets = templates.split(" ");
 	var d0 = createDiv("typeBlocksContainer", mainPage);
 	for (var i = 0; i < templSets.length; i++) {
 		var d = createDiv("typeBlock", d0);
 		if (templSets.length > 1) {
 			addP(d, "Type " + (i+1), "h2");
 		}
-		var singleTemplates = templSets[i].split("+");
+		var singleTemplates = [];//templSets[i].split("+");
+		var templatesCounts = [];
+		for (var j = 0; j < templSets[i].length; j++) {
+			singleTemplates.push(templSets[i][j].type);
+			templatesCounts.push(templSets[i][j].count);
+		}
+		
 		//function drawFacesPreview(parent, color, templatesArray) {
 		//addP(d, "3D preview", "h3");
 
@@ -723,27 +749,32 @@ function drawTemplates(templates, vf, polyName) {
 		addP(dd, "Templates","h3");
 		ddd = createDiv("templatesPreviewBlock", dd);
 		ddd.templates = singleTemplates.slice(0);
+		ddd.templatesCounts = templatesCounts.slice(0);
 		ddd.typeNum = i+1;
 		ddd.multiTypes = (templSets.length > 1);
 		// = [];
 		// generateTemplates(parent, options = {}, resObj = [])
 		var psvgData = generateTemplates(ddd)
 		createTemplatesInfo(d, psvgData, i+1);
+		var fTypes = getSortedFacesTypes(singleTemplates, vf);
+		
+		var minIndex = 100;
+		var prefType = "";
+		for (var it = 0; it < fTypes.length; it ++) {
+			var indInPrefs = wireHolePreferences.indexOf(fTypes[it]);
+			if (indInPrefs>=0 && indInPrefs < minIndex) {
+				minIndex = indInPrefs;
+				prefType = fTypes[it];
+			}
+		}
+		var vfArr = vf.split(".");
+		var wireFaceType = prefType ? parseInt(prefType.slice(1)) : vfArr[0];
+		var ftInd = vfArr.indexOf(wireFaceType.toString());
+		ddd.nexts = [Number(vfArr[(ftInd + 1)%vfArr.length]), Number(vfArr[(ftInd + vfArr.length - 1)%vfArr.length])];
+	
+		ddd.wireFaceType = wireFaceType; 
 		if (showWire) {
 			
-			var fTypes = getSortedFacesTypes(singleTemplates, vf);
-			
-			var minIndex = 100;
-			var prefType = "";
-			for (var it = 0; it < fTypes.length; it ++) {
-				var indInPrefs = wireHolePreferences.indexOf(fTypes[it]);
-				if (indInPrefs>=0 && indInPrefs < minIndex) {
-					minIndex = indInPrefs;
-					prefType = fTypes[it];
-				}
-			}
-			var wireFaceType = prefType ? parseInt(prefType.slice(1)) : vf.split(".")[0];
-			ddd.wireFaceType = wireFaceType; 
 			psvgData = generateTemplates(ddd, {showWire: true}, psvgData);
 		}
 		
@@ -764,25 +795,29 @@ function drawTemplates(templates, vf, polyName) {
 function generateTemplates(parent, options = {}, resObj = []) {
 	var ddd = parent;
 	var singleTemplates = ddd.templates;
-	if (options.showWire) {
-		for (var j = 0; j < singleTemplates.length; j++) {
-		
-			var wireTemplateData = getSpiralTemplateData( singleTemplates[j], edge, {wire:  ddd.wireFaceType, wireRadius: cmToPixels(wireSize/20)});
-			if (wireTemplateData) {
-				var s = createDiv("templatePage", ddd); 
-				var psvg = new PlotSVG ({
-					id: singleTemplates[j] + "_" + ddd.typeNum+ "_" + edge + "_wire", 
-					saveButton: true, 
-					saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) + " (wire)": " wire face template"), 
-					saveFileName: "ppp_" + curPoly.split(" ").join("_") +
-					 (ddd.multiTypes ? "_type" + ddd.typeNum : "") + 
-					 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
-					 "_edge" + edge + "px_dpi" + defaultDPI + "_wire"}, s);
-				resObj.push(drawSpiralTemplateImpl(psvg, wireTemplateData));
+	if (options.showWire) { //TODO wire faces count
+		var l = ddd.nexts[0] == ddd.nexts[1] ? 1 : 2;
+		for (var ii = 0; ii < l; ii++)
+			for (var j = 0; j < singleTemplates.length; j++) {
+			
+				var wireTemplateData = getSpiralTemplateData( singleTemplates[j], 
+															edge, 
+															{wire:  ddd.wireFaceType, next: ddd.nexts[ii], wireRadius: cmToPixels(wireSize/20)});
+				if (wireTemplateData) {
+					var s = createDiv("templatePage", ddd); 
+					var psvg = new PlotSVG ({
+						id: singleTemplates[j] + "_" + ddd.typeNum+ "_" + edge + "_wire", 
+						saveButton: true, 
+						saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) + " (wire)": " wire face template"), 
+						saveFileName: "ppp_" + curPoly.split(" ").join("_") +
+						 (ddd.multiTypes ? "_type" + ddd.typeNum : "") + 
+						 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
+						 "_edge" + edge + "px_dpi" + defaultDPI + "_wire"}, s);
+					resObj.push(drawSpiralTemplateImpl(psvg, wireTemplateData));
+				}
+			
+			
 			}
-		
-		
-		}
 	} else {
 		templatePageSizes[ddd.typeNum] = [];
 		for (var j = 0; j < singleTemplates.length; j++) {
@@ -790,13 +825,13 @@ function generateTemplates(parent, options = {}, resObj = []) {
 			var psvg = new PlotSVG ({
 				id: singleTemplates[j] + "_" + ddd.typeNum + "_" + edge, 
 				saveButton: true, 
-				saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) : ""), 
+				saveButtonName: "Save" +  (singleTemplates.length > 1 ? " page " + (j+1) : "") + " (x" + ddd.templatesCounts[j] + ")", 
 				saveFileName: "ppp_" + curPoly.split(" ").join("_") +
 				 (ddd.multiTypes ? "_type" + ddd.typeNum : "") + 
 				 (singleTemplates.length > 1 ? "_page" + (j+1) + "of" + singleTemplates.length : "") + 
-				 "_edge" + edge + "px_dpi" + defaultDPI}, s);
+				 "_edge" + edge + "px_dpi" + defaultDPI + "_x" + ddd.templatesCounts[j]}, s); 
 			resObj.push(drawSpiralTemplate(psvg, singleTemplates[j], edge));
-			templatePageSizes[ddd.typeNum].push({w: psvg.svg.getAttribute("width"), h: psvg.svg.getAttribute("height")});
+			templatePageSizes[ddd.typeNum].push({w: psvg.svg.getAttribute("width"), h: psvg.svg.getAttribute("height"), count: ddd.templatesCounts[j]}); 
 			
 			
 		}
@@ -816,12 +851,6 @@ function updateTemplatePages() {
 
 function createTemplatesInfo(parent, templatesData, ind) {
 	var numberOfTemplatePages = templatesData.length;
-	/*var sizes = [];
-	for (var i = 0; i < templatesData.length; i++) {
-		
-		sizes.push({w: pixelsToCm(templatesData[i].svg.getAttribute("width")), 
-					h: pixelsToCm(templatesData[i].svg.getAttribute("height"))});
-	}*/
 	var sizes = templatePageSizes[ind].slice(0);
 	var d = createDiv("templatesInfo", parent);
 	d.pagesNum = numberOfTemplatePages;
@@ -855,7 +884,7 @@ function fillTemplateInfo(d) {
 
 	addP(d, "Templates pages:&nbsp;" + d.pagesNum +" ", "span");
 	for (var i = 0; i < sizes.length; i++) {
-		addP(d, "&nbsp;" + pixelsToCm(Number(sizes[i].w)).toFixed(1) + "&nbsp;x&nbsp;" + pixelsToCm(Number(sizes[i].h)).toFixed(1) + "&nbsp;cm ", "span");
+		addP(d, pixelsToCm(Number(sizes[i].w)).toFixed(1) + "&nbsp;x&nbsp;" + pixelsToCm(Number(sizes[i].h)).toFixed(1) + "&nbsp;cm&nbsp;(x" + sizes[i].count + ") ", "span"); 
 	}
 }
 
@@ -868,6 +897,184 @@ function updateDescriptions(){
 	}
 	
 };
+
+function getPolyObjectByVF(vf) {
+	var vfSimpleArr = vf.split(".");
+	var vfArr = processVF(vf);
+	var vfObjs = [];
+	for (var i = 0; i < vfArr.length; i++) {
+		var nexts = vfArr[i].split(":")[1].split("_").sort(function(a,b) {return a-b});;
+		nexts[0]=parseInt(nexts[0]);
+		nexts[1] = parseInt(nexts[1]);
+		vfObjs.push({n: parseInt(vfArr[i].split(":")[0]), 
+					nexts: nexts, 
+					n_s: vfArr[i].split(":")[0], 
+					nexts_s: [nexts[0].toFixed(0), nexts[1].toFixed(0)]});
+	}
+	var res = {};
+	res.vf = vf;
+	var factor = 0;
+	var l = vfSimpleArr.length;
+	for (var i = 0; i < l; i++) {
+		factor += 1/Number(vfSimpleArr[i]);
+	}
+	//console.log(vf, factor, l, vfArr);
+	res.V = Math.round(2/(1 - 0.5*l + factor));
+	res.E = Math.round(res.V * l / 2);
+	res.F = 2 - res.V + res.E;
+	var eObj = {};
+	var fObj = {};
+	for (var i = 0; i < l; i++) {
+		var sides = [vfSimpleArr[i],vfSimpleArr[(i+1)%l]].sort(function(a,b) {return a-b});
+		var eString = "e" + sides.join("");;
+		if (eObj.hasOwnProperty(eString)) eObj[eString] ++
+		else {
+			eObj[eString] = 1;
+		}
+		if (fObj.hasOwnProperty("f" + vfSimpleArr[i])) fObj["f" + vfSimpleArr[i]] ++;
+		else fObj["f" + vfSimpleArr[i]] = 1;
+	}
+	res.eObj = eObj;
+	res.fObj = fObj;
+	var area = 0;
+	for (var f in fObj) {
+		var numSides = parseInt(f.slice(1))
+		res[capitalize(f)] = res.V*fObj[f]/numSides;
+		area += res[capitalize(f)]*numSides*0.25/Math.tan(Math.PI/numSides);
+	}
+	res.area = area;
+	res.diameter = Math.sqrt(area/Math.PI);
+	for (var f in eObj) {
+		res[capitalize(f)] = res.V*eObj[f]/2;
+	}
+	
+	var templates = [];
+	function getSTemplate(edge) {
+		var nums = edge.slice(1);
+		if (nums.length % 2 == 0) {
+			if (nums.slice(0, nums.length/2) == nums.slice(nums.length/2)) nums = nums.slice(nums.length/2);
+		}
+		var s = "s" + nums;
+		var count = res[capitalize(edge)];
+		return {type: s, count: count}
+	}
+	templates[0] = [];
+	for (var f in eObj) {
+		templates[0].push(getSTemplate(f));
+	}
+	
+	function getHSTemplate(i, double) {
+		var resStr = "hs";
+		var hsCount = res["E" + vfObjs[i].nexts_s[0] + vfObjs[i].n_s];
+		var sEdges = []; 
+		if (!double) {
+			resStr += vfObjs[i].n_s + vfObjs[i].nexts_s.join("");
+			sEdges.push("e"  + (vfObjs[i].nexts_s[0] + vfObjs[i].n_s));
+			sEdges.push("e"  + (vfObjs[i].n < vfObjs[i].nexts[1] ? vfObjs[i].n_s + vfObjs[i].nexts_s[1] : vfObjs[i].nexts_s[1] + vfObjs[i].n_s));
+		}
+		else {
+			var n2 = vfObjs[i].n;
+			var nexts2 = vfObjs[i].nexts.slice(0);
+			for (var j = 0; j < vfObjs.length; j++) {
+				if (j != i && vfObjs[j].n > 5) {
+					n2 = vfObjs[j].n;
+					nexts2 = vfObjs[j].nexts.slice(0);
+				}
+			}
+			var n2_s = n2.toFixed(0);
+			var n2next_s = nexts2[0].toFixed(0);
+			resStr += n2 > vfObjs[i].n ?  
+				(vfObjs[i].n_s + vfObjs[i].nexts_s[0] + n2_s + n2next_s) : 
+				(n2_s + n2next_s +  (n2 == vfObjs[i].n ? "" : vfObjs[i].n_s + vfObjs[i].nexts_s[0]))
+			sEdges.push("e"  + (vfObjs[i].nexts_s[0] + vfObjs[i].n_s));
+			sEdges.push("e"  + (vfObjs[i].n < vfObjs[i].nexts[1] ? vfObjs[i].n_s + vfObjs[i].nexts_s[1] : vfObjs[i].nexts_s[1] + vfObjs[i].n_s));
+			if (n2 != vfObjs[i].n) sEdges.push("e" + n2next_s + n2_s);
+		}
+		var hsTemplates = [{type: resStr, count: hsCount}];
+		for (var f in eObj) 
+				if (sEdges.indexOf(f) < 0) hsTemplates.push(getSTemplate(f));
+		templates.push(hsTemplates.slice(0));			
+	}
+	
+	for (var i = 0; i < vfObjs.length; i++) {
+		if (vfObjs[i].n > 5 && vfObjs[i].n % 2 == 0 && vfObjs[i].nexts[1] != vfObjs[i].n && vfObjs[i].nexts[0] != vfObjs[i].n)
+			getHSTemplate(i, false);
+	}
+	var doubleHSExists = false;
+	for (var i = 0; i < vfObjs.length; i++) {
+		if (!doubleHSExists && vfObjs[i].n > 5 && vfObjs[i].n % 2 == 0 && ((vfObjs[i].nexts[1] > 5 && vfObjs[i].nexts[1] % 2 == 0)|| (vfObjs[i].nexts[0] > 5 && vfObjs[i].nexts[2] % 2 == 0))) {
+			getHSTemplate(i, true);
+			doubleHSExists = true;
+		}
+	}
+	
+	
+	function addFTemplate(ind, fTemplates, sEdges) {
+		var i = ind;
+		var n = vfObjs[i].n;
+		var nexts = vfObjs[i].nexts;
+		var n_s = vfObjs[i].n_s;
+		var nexts_s = vfObjs[i].nexts_s;
+		var exists = false;
+		if (fTemplates.length > 0) {
+			for (var jt = 0; jt < fTemplates.length; jt++) {
+				if (fTemplates[jt].type.charAt(0) == "f" && fTemplates[jt].type.charAt(1) == n_s.charAt(0))
+					exists = true;
+			}
+		}
+		if (!exists && nexts[0] != n && nexts[1] != n) {
+			var fTemplate = {type: "f" + n_s + nexts_s[0] + (nexts[0] == nexts[1]? "" : nexts_s[1]), count: res["F" + n_s]};
+			sEdges.push("e" + (n < nexts[0] ? n_s + nexts_s[0] : nexts_s[0] + n_s));
+			if (nexts[0] != nexts[1]) sEdges.push("e" + (n < nexts[1] ? n_s + nexts_s[1] : nexts_s[1] + n_s));
+			fTemplates.push(fTemplate);
+			for (var f in eObj) 
+				if (sEdges.indexOf(f) < 0) fTemplates.push(getSTemplate(f));
+			return fTemplate;
+			
+		}
+		return null;
+	}
+	for (var i = 0; i < vfArr.length; i++) {
+		var fTemplates = [];
+		var sEdges = [];
+		var ft = addFTemplate(i, fTemplates, sEdges);
+		if (ft) {
+			templates.push(fTemplates.slice(0));
+			fTemplates = [ft];
+			var n = vfObjs[i].n;
+			for (var j = i+1; j < vfArr.length; j++) {
+				var mNexts = vfObjs[j].nexts;
+				if (mNexts[0] != n && mNexts[1] != n) {
+				
+					var ft2 = addFTemplate(j, fTemplates, sEdges);
+					if (ft2) templates.push(fTemplates.slice(0));
+				}
+				
+			}
+		}
+	}
+	
+	var snub = /(3\.){4}(4|5)/.exec(vf);
+	if (snub) {
+		var n = parseInt(snub[2]);
+		var F3e = res["F" + snub[2]]*n;
+		var f3Templ = {type: "f33", count: res.F3 - F3e};
+		var s3Templ = {type: "s3", count: F3e/2};
+		var fnTempl = {type: "f" + snub[2] + "3", count: res["F" + snub[2]] };
+		templates.push([{type: "sf" + snub[2], count: res.E/5}], 
+		[f3Templ, s3Templ, {type: "s3" + snub[2], count: res["E3" + snub[2]]}],
+		[f3Templ, fnTempl, s3Templ]);
+	
+	}
+	
+	if (vf == "3.4.4.4") {
+		var f44 = {type: "f44", count: 6} 
+		templates.push([{type: "f434", count: 12}], [f44, {type: "s34", count: 24}], [f44, {type: "f34", coun: 8}]);
+	}
+	res.templates = templates;
+	
+	return res;
+}
 
 
 function create3DPreview(parent, color, templatesArray, vf, polyName){
