@@ -932,7 +932,7 @@ function createTemplatesInfo(parent, templatesData, ind) {
 	d.typeNum = ind;
 	fillTemplateInfo(d);
 	var fitButton = document.createElement("button");
-		fitButton.innerHTML = "Fit in A4";
+		fitButton.innerHTML = "Fit to A4";
 		fitButton.sizesData = sizes.slice();
 		fitButton.setAttribute("id", "fitButton" + ind);
 		fitButton.onclick = function () {
@@ -957,7 +957,7 @@ function createTemplatesInfo(parent, templatesData, ind) {
 function fillTemplateInfo(d) {
 	var sizes = templatePageSizes[d.typeNum].slice(0);
 
-	addP(d, "Templates pages:&nbsp;" + d.pagesNum);// +"<br/> ", "span");
+	addP(d, "Templates:&nbsp;" + d.pagesNum);// +"<br/> ", "span");
 	for (var i = 0; i < sizes.length; i++) {
 		addP(d, pixelsToCm(Number(sizes[i].w)).toFixed(1) + "&nbsp;x&nbsp;" + pixelsToCm(Number(sizes[i].h)).toFixed(1) + "&nbsp;cm&nbsp;(x" + sizes[i].count + ") ", "span"); 
 	}
