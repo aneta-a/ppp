@@ -1145,7 +1145,7 @@ function getPolyObjectByVF(vf) {
 	
 	if (vf == "3.4.4.4") {
 		var f44 = {type: "f44", count: 6} 
-		templates.push([{type: "f434", count: 12}], [f44, {type: "s34", count: 24}], [f44, {type: "f34", coun: 8}]);
+		templates.push([{type: "f434", count: 12}], [f44, {type: "s34", count: 24}], [f44, {type: "f34", count: 8}]);
 	}
 	res.templates = templates;
 	
