@@ -72,7 +72,7 @@ function PlotCanvas (initObj = {}, parent = document.body) {
 		that.drawHorLine(y, color, width);
 	}
 	
-	this.drawPolygon = function (xs, ys, color, width = 2, fill = false, fillColor = null, fillAlpha = "33") {
+	this.drawPolygon = function (xs, ys, color, width = 2, fill = false, fillColor = null, fillAlpha = this.scaleObj.fillAlpha) {
 		ctx.strokeStyle = color;
 		ctx.lineWidth = width;
 		ctx.beginPath();
@@ -89,13 +89,12 @@ function PlotCanvas (initObj = {}, parent = document.body) {
 		}
 		ctx.stroke();
 	}
+	
 
+this.alphaToAbsorption = function(visibleAlpha = parseInt(this.scaleObj.fillAlpha, 16), countLayerAlpha = parseInt(this.scaleObj.fillAlpha, 16), light = {r:255, g:255, b:255, a:255}) {
+	PC.alphaToAbsorption(this.canvas, countLayerAlpha, visibleAlpha, light);
 }
-
-PlotCanvas.prototype = new Object();
-
-PlotCanvas.defaults = {minY: -1, maxY: 1, maxX: 1, minX: -1, adjust: "all"/*"none" "crop"*/, centerX: true, centerY: true, width: 600, height: 400};
-
+	
 function plotParInit(qs, plotPar) {
 		function setVar (obj, name, val, number = false) {
 			if (qs.hasOwnProperty(name)) obj[name] = number ? Number(qs[name]) : qs[name];
@@ -161,5 +160,72 @@ function plotParInit(qs, plotPar) {
 		return plotPar;
 }
 
+
+}
+
+PlotCanvas.prototype = new Object();
+
+PlotCanvas.defaults = {minY: -1, maxY: 1, maxX: 1, minX: -1, adjust: "all"/*"none" "crop"*/, centerX: true, centerY: true, width: 600, height: 400, fillAlpha: "1C"};
+
+(function(){
+
+this.countLayerAlpha = "1C";
+this.viewAlpha = "66";
+
+
+function transformCanvas (canvas, transformFunc) {
+	var ctx = canvas.getContext('2d');
+	var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	var data = imageData.data;
+    for (var i = 0; i < data.length; i += 4) {
+    	var newRGBA = transformFunc({r: data[i], g: data[i+1], b: data[i+2], a: data[i+3]});
+      data[i]     = newRGBA.r;     // red
+      data[i + 1] = newRGBA.g; // green
+      data[i + 2] = newRGBA.b; // blue
+      data[i + 3] = newRGBA.a; // blue
+    }
+    ctx.putImageData(imageData, 0, 0);
+}
+this.transformCanvas = transformCanvas;
+
+this.invertAlpha = function(canvas) {
+	return transformCanvas(canvas, function (rgba) {return {r: rgba.r, g: rgba.g, b: rgba.b, a: 255-rgba.a};});
+}
+
+this.alphaToAbsorption_ = function(canvas, gray = 0) {
+	return transformCanvas(canvas, function (rgba) {
+		var epsilon = 1 - rgba.a/255.0;
+		return {r: Math.round(gray*(1-epsilon) + rgba.r*epsilon), g: Math.round(gray*(1-epsilon) + rgba.g*epsilon), b: Math.round(gray*(1-epsilon) + rgba.b*epsilon), a: 255}
+	});
+}
+
+this.alphaToAbsorption = function(canvas, 
+		layerAlpha = parseInt(PlotCanvas.defaults.fillAlpha, 16), 
+		visibleAlpha = parseInt(PlotCanvas.defaults.fillAlpha, 16)/*100*/, 
+		extLight = {r: 255, g:255, b: 255, a: 255}) {
+	var log255 = Math.log(255);
+	var alpha = layerAlpha*0.003921569; // /255
+	var logA = Math.log(255.0-layerAlpha) - log255;
+	var vAlpha = visibleAlpha*0.003921569;
+	var maxC = 240; 
+	var maxLayer = -Math.log(layerAlpha)/logA;//=(LN(A35)/(LN(255)-LN(255-A35))), a35=
+	function transformPixel (rgba) {
+		var layers = rgba.a == 255 ? maxLayer: Math.min(maxLayer, Math.round((Math.log(255-rgba.a)-log255)/logA));
+		function getComponent(c) {
+			var base = (Math.min(maxC,rgba[c])*vAlpha+255-visibleAlpha)*0.003921569;
+			var n = layers;
+			var res = extLight[c];
+			while (n-- > 0 && res > 1) res*=base;
+			return Math.round(res);
+		}
+		//var epsilon = 1 - rgba.a/255.0;
+		return {r: getComponent("r"), g: getComponent("g"), b: getComponent("b"), a: 255}
+	}
+	
+	return transformCanvas(canvas, transformPixel );
+}
+}).apply(PlotCanvas);
+
+var PC = PlotCanvas;
 
 

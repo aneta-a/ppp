@@ -18,7 +18,11 @@ var previews3d = [];
 var previewColor = colors[1];
 var showWire = false;
 var wireSize = 6.0; //mm
+var nightView = true;
 var sideMenu, mainPage;
+
+var dayBackground = "#00000000";
+var nightBackgorund = "#000000";
 
 function pixelsToCm (arg, dpi = defaultDPI) {
 	return arg/dpi*2.54;
@@ -56,6 +60,7 @@ function setGlobalVars (qs) {
 		else previewColor = qs.color;
 	}
 	if (qs.hasOwnProperty("showWire")) showWire = getBool(qs.showWire);
+	if (qs.hasOwnProperty("nightView")) nightView = getBool(qs.nightView);
 	if (qs.hasOwnProperty("wireSize")) wireSize = parseFloat(qs.wireSize);
 
 }
@@ -66,6 +71,7 @@ function hideSideMenu() {
   	document.getElementById('main').style.marginLeft = '0';
   	document.getElementById('menuButton').style.display='inline-block';
   	document.getElementById('hideMenuButton').style.display='none';
+  	//TODO hide list and options (or get rid of a scroller some other way)
 }
 
 function showSideMenu() {
@@ -95,6 +101,8 @@ function readTemplateStyle() {
 }
 
 function readCSVData (name) {
+
+	//TODO don't read table, make list of names and vfs an object (also for localization)
 
 	var txt = '';
 	console.log("Reading data...");
@@ -224,8 +232,6 @@ function createLinksList (polyData) {
 	newQS.showList = true;
 	var nameInd = polyData[0].indexOf("Name");
 	var vfInd = polyData[0].indexOf("Vertex figure");
-	var eInd = polyData[0].indexOf("E");
-	var vInd = polyData[0].indexOf("V");
 	addP(list, "Polyhedra", "h2");
 	
 	function createLink (name, vf) {
@@ -239,12 +245,7 @@ function createLinksList (polyData) {
 	for (var i = 1; i < polyData.length; i++) {
 		if (polyData[i][nameInd]) {
 			var name = polyData[i][nameInd].charAt(0).toUpperCase() + polyData[i][nameInd].slice(1);
-			//newQS.vf = polyData[i][vfInd];
 			createLink(name, polyData[i][vfInd]);
-			//var a = addP(addP(list, ""), name, "a");
-			//a.setAttribute("class", "polyhedronLink");
-			//a.setAttribute("href", location.href.split("?")[0] + "?" + createQueryString(newQS));
-			//console.log(getPolyObjectByVF(polyData[i][vfInd]), "e=" + polyData[i][eInd],"v=" + polyData[i][vInd]);
 		}
 	}
 	createLink("Uniform prism", "4.4.7");
@@ -282,27 +283,55 @@ function addOptionsBlock (parent) {
 	if (curPoly.toLowerCase().split(" ")[0] == "uniform") {
 		addOption(d, "baseVertices", "Number of vertices in base", curVF.split(".").slice(-1)[0]);
 	}
-	var showWireChb = document.createElement("input");
+	var showWireChb = addCheckbox(d, "showWire", "Generate templates with a hole for wire", showWire); 
+	var vs = addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
+	showElement(document.getElementById("wireSize_option"), showWire);
+	showWireChb.addEventListener("change", function (e) {showElement(document.getElementById("wireSize_option"), e.target.checked);});
+	addCheckbox(d, "nightView", "Night view", nightView);
+	/*= document.createElement("input");
 	showWireChb.setAttribute("type", "checkbox");
 	if (showWire) showWireChb.setAttribute("checked", "checked");
 	d.appendChild(showWireChb);
 	addP(d, "Generate templates with a hole for wire", "span");
-	var vs = addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
-	showElement(document.getElementById("wireSize_option"), showWire);
 	
 	showWireChb.onchange = function () {
 		
 		onOptionChanged("showWire", showWireChb.checked);
-		showElement(document.getElementById("wireSize_option"), showWireChb.checked);
+		
 	}
 	
-	
+	var nightViewChb = document.createElement("input");
+	nightViewChb.setAttribute("type", "checkbox");
+	if (nightView) nightViewChb.setAttribute("checked", "checked");
+	d.appendChild(nightViewChb);
+	addP(d, "Night view", "span");
+	nightViewChb.onchange = function () {
+		
+		onOptionChanged("nightView", nightViewChb.checked);
+		showElement(document.getElementById("wireSize_option"), showWireChb.checked);
+	}
+
+	*/
 	addHideButton(d, "Options", "^", qs.hasOwnProperty("showOptions") ? getBool(qs.showOptions) : false);
 	
 }
+function addCheckbox (parent, name, description, defaultValue) {
+	var dd = createDiv("checkboxGroup", parent);
+	var chb = document.createElement("input");
+	chb.setAttribute("type", "checkbox");
+	if (defaultValue) chb.setAttribute("checked", "checked");
+	dd.appendChild(chb);
+	addP(dd, description, "span");
+	chb.addEventListener("change", function (e) {
+		
+		onOptionChanged(name, e.target.checked);
+	});
+	return chb;
+
+}
 
 function addOption (parent, name, description, defaultValue) {
-	var validNumberRegEx = "-?((\d*\.\d+)|(\d+))((e|E)-?\d+)?";
+	var validNumberRegEx = "-?((\\d*\\.\\d+)|(\\d+))((e|E)-?\\d+)?";
 	if (!defaultValue) defaultVaule = qs[name];
 	var d = createDiv("optionBlock", parent);
 	d.setAttribute("id", name+"_option");
@@ -314,8 +343,8 @@ function addOption (parent, name, description, defaultValue) {
 		//TODO check browser support
 	} else {
 		input.setAttribute("type", "text");
-		//TODO pattern doesn't work
-		//input.setAttribute("pattern", validNumberRegEx);
+		
+		input.setAttribute("pattern", validNumberRegEx);
 	}
 	input.setAttribute("value", defaultValue);
 	input.setAttribute("id", name + "_ui");
@@ -340,6 +369,13 @@ function onOptionChanged(name, value) {
 		qs[name] = value; 
 		setGlobalVars(qs);
 		updateTemplatePages();
+		updateLinks(qs);
+	} else if (name == "nightView") {
+		qs.nightView = value;
+		nightView = value;
+		for (var i = 0; i < previews3d.length; i++) {
+			updateMaterial(previews3d[i], {nightView: value});
+		}
 		updateLinks(qs);
 	} else if (name == "size") {
 		qs.size = value;
@@ -921,7 +957,7 @@ function createTemplatesInfo(parent, templatesData, ind) {
 function fillTemplateInfo(d) {
 	var sizes = templatePageSizes[d.typeNum].slice(0);
 
-	addP(d, "Templates pages:&nbsp;" + d.pagesNum +" ", "span");
+	addP(d, "Templates pages:&nbsp;" + d.pagesNum);// +"<br/> ", "span");
 	for (var i = 0; i < sizes.length; i++) {
 		addP(d, pixelsToCm(Number(sizes[i].w)).toFixed(1) + "&nbsp;x&nbsp;" + pixelsToCm(Number(sizes[i].h)).toFixed(1) + "&nbsp;cm&nbsp;(x" + sizes[i].count + ") ", "span"); 
 	}
@@ -1133,6 +1169,7 @@ function create3DPreview(parent, color, templatesArray, vf, polyName){
 	if (lp) {
 		var cs3d = document.createElement("canvas");
 		cs3d.setAttribute("class", "preview3d");
+		cs3d.classList.add(nightView ? "night" : "day");
 		var ctx3d = createThreeContext(cs3d);
 		//return {renderer: renderer, scene: scene, camera: camera, controls: controls};
 		parent.appendChild(ctx3d.renderer.domElement);
@@ -1142,7 +1179,7 @@ function create3DPreview(parent, color, templatesArray, vf, polyName){
 
 		var textureCanvas = getTextureCanvas(null, color, templatesArray, vf).canvas;
 		var texture = new THREE.CanvasTexture(textureCanvas);
-		var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
+		var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});//, emissive: "#cccccc", emissiveIntesity: 0.1, emissiveMap: texture});
 		
 		var vfArr = processVF(vf);
 		var aspect = textureCanvas.width/textureCanvas.height;
@@ -1189,9 +1226,21 @@ function updateMaterial (ctx3d, options) {
 		var textureCanvas = getTextureCanvas(null, options.color, ctx3d.templates, ctx3d.vf).canvas;
 		var texture = new THREE.CanvasTexture(textureCanvas);
 		ctx3d.poly3D.material.map = texture;
+		//ctx3d.poly3D.material.emissiveMap = texture;
 		ctx3d.poly3D.material.needsUpdate = true;
 		updateThreeContext(ctx3d);
 		//var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
+	} else if (options.hasOwnProperty("nightView")) {
+		var textureCanvas = getTextureCanvas(null, previewColor, ctx3d.templates, ctx3d.vf).canvas;
+		console.log("Updating material", nightView);
+		var texture = new THREE.CanvasTexture(textureCanvas);
+		ctx3d.poly3D.material.map = texture;
+		//ctx3d.poly3D.material.emissiveMap = texture;
+		ctx3d.poly3D.material.needsUpdate = true;
+		ctx3d.renderer.domElement.classList.remove(options.nightView ? "day" : "night");
+		ctx3d.renderer.domElement.classList.add(options.nightView ? "night" : "day");
+		
+		updateThreeContext(ctx3d);
 	}
 }
 
@@ -1227,7 +1276,7 @@ function drawFacesPreview(parent, color, templatesArray) {
 	var maxSize = edge/Math.sin(Math.PI/maxN);
 	function getCanvas(scale) {
 		var w = maxSize * scale;
-		var cs = new PlotCanvas({width: w, height: w, minX: -scale, maxX: scale, minY: -scale, maxY: scale}, parent);
+		var cs = new PlotCanvas({width: w, height: w, minX: -scale, maxX: scale, minY: -scale, maxY: scale, fillAlpha: PC.viewAlpha}, parent);
 		cs.canvas.setAttribute("class", "facePreview");
 		return cs;  
 	}
@@ -1256,7 +1305,7 @@ function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
 		var cHeight = 512;
 		var aspect = (typesHomo.length == 1 ? 1: (typesHomo.length == 2 ? 2 : 4));
 		var cWidth = aspect*cHeight;
-		var resCs = new PlotCanvas({width: cWidth, height: cHeight}, parent);
+		var resCs = new PlotCanvas({width: cWidth, height: cHeight, fillAlpha: (nightView ? PC.countLayerAlpha : PC.viewAlpha)}, parent); //TODO viewAlpha, if day
 		for (var i = 0; i < typesHomo.length; i++) {
 			resCs.setScale({minX: -1-2*i, maxX: 2*(aspect-i)-1});
 			var n = Number(typesHomo[i].slice(1));
@@ -1273,6 +1322,7 @@ function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
 			}
 			
 		}
+		if (nightView) resCs.alphaToAbsorption(PC.viewAlpha);
 		return resCs;
 	} else {
 		console.warn("Invalid face types set", templatesArray, types);
