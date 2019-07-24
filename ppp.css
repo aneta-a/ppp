@@ -141,7 +141,12 @@ canvas.facePreview {
 }
 canvas.preview3d {
 margin-bottom: auto;
+}
+canvas.day {
 background-color: #00000000;	
+}
+canvas.night {
+background-color: #000000;	
 }
 
 
