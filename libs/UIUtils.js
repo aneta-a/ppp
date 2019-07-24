@@ -284,5 +284,6 @@ function capitalize(string) {
 	}
 }
 
+
 console.log("UIUtils loaded");
 
