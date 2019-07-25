@@ -87,7 +87,6 @@ button {
   color: #eeffcc;
 }
 
-
 .description {
 	margin: 4px;
 	padding-top: 0px;
@@ -234,5 +233,29 @@ label.radiolabel {
 	display: inline-grid;
 	border: 1px solid green;
 	
+}
+
+.overAll{
+	position: fixed;
+	width: 40%;
+	height: 20%;
+	left: 30%;
+	top:40%;
+	z-index: 2;
+	display: block;
+	background-color: #eeeedddd;
+		border: 1px solid brown;
+
+}
+
+.overAll > p {
+text-align: center;
+vertical-align: middle;
+margin-top: 10%;
+font-size: 3em;
+}
+
+.hidden {
+	display: none;
 }
 
