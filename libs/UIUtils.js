@@ -3,7 +3,7 @@
 */
 
 
-function parseQueryString(){
+function parseQueryString(options = {}){
 	var queryString = window.location.search;
 	var res = {};
 	if (queryString) {
@@ -11,8 +11,12 @@ function parseQueryString(){
 		var params = queryString.split("&");
 		for (var i = 0; i < params.length; i++){
 			var keyValue = params[i].split("=");
-			var val = Number(keyValue[1]);
-			res[keyValue[0]] = !Number.isNaN(val) ? val : keyValue[1];
+			if (options.hasOwnProperty("asis") && options.asis.indexOf(keyValue[0]) >= 0) {
+				res[keyValue[0]] = keyValue[1];
+			} else {
+				var val = Number(keyValue[1]);
+				res[keyValue[0]] = !Number.isNaN(val) ? val : keyValue[1];
+			}
 		}
 			
 	}
