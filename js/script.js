@@ -19,10 +19,9 @@ var previewColor = colors[1];
 var showWire = false;
 var wireSize = 6.0; //mm
 var nightView = true;
+var nightViewChanged = false;
 var sideMenu, mainPage;
 
-var dayBackground = "#00000000";
-var nightBackgorund = "#000000";
 
 function pixelsToCm (arg, dpi = defaultDPI) {
 	return arg/dpi*2.54;
@@ -32,16 +31,17 @@ function cmToPixels (arg, dpi = defaultDPI) {
 }
 
 function pageInit() {
+	sideMenu = document.getElementById("list");
+	mainPage = document.getElementById("main");
+	showWait();
 
-	qs = parseQueryString();
+	qs = parseQueryString({asis: ["color"]});
 	setGlobalVars(qs);
 	readTemplateStyle();
 	
 	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
 		showSideMenu();
 	
-	sideMenu = document.getElementById("list");
-	mainPage = document.getElementById("main");
 	readCSVData("templates.csv");
 	animate();
 	
@@ -55,6 +55,7 @@ function setGlobalVars (qs) {
 	if (qs.hasOwnProperty("polyhedron")) curPoly = qs.polyhedron;
 	if (qs.hasOwnProperty("thickness")) thickness = qs.thickness;
 	if (qs.hasOwnProperty("color")) {
+		var regC = /^(?:[0-9a-fA-F]{3}){1,2}$/.exec(qs.color);
 		if (/^(?:[0-9a-fA-F]{3}){1,2}$/.exec(qs.color))
 			previewColor = "#" + qs.color;
 		else previewColor = qs.color;
@@ -80,6 +81,21 @@ function showSideMenu() {
   	document.getElementById('menuButton').style.display='none'
   	document.getElementById('hideMenuButton').style.display='inline-block'
 }
+
+function showWait() {
+	var pleaseWait = document.getElementById("pleaseWaitWindow");
+	if (!pleaseWait) {
+		pleaseWait = createDiv("overAll", mainPage);
+		addP(pleaseWait, "Please, wait...");
+		pleaseWait.setAttribute("id", "pleaseWaitWindow");
+	}
+	pleaseWait.classList.remove("hidden");
+}
+
+function hideWait() {
+	document.getElementById("pleaseWaitWindow").classList.add("hidden");
+}
+
 
 //-----------------------------------------------
 
@@ -179,6 +195,7 @@ function onCSVRead (text) {
 		showSideMenu();
 		
 	}
+	hideWait();
 }
 
 function checkTemplates(data, vfInd, templInd) {
@@ -277,129 +294,85 @@ function updateLinks(qs) {
 function addOptionsBlock (parent) {
 	var d = createDiv("optionsBlock", parent);
 	addP(d, "Options", "h2");
-	addOption(d, "color", "Color&nbsp;", previewColor);
+	addOption(d, "color", "Color&nbsp;", previewColor, "color");
 	addOption(d, "size", "Edge length in pixels", edge);
 	addOption(d, "thickness", "Thickness of the material, mm", thickness);
 	if (curPoly.toLowerCase().split(" ")[0] == "uniform") {
 		addOption(d, "baseVertices", "Number of vertices in base", curVF.split(".").slice(-1)[0]);
 	}
-	var showWireChb = addCheckbox(d, "showWire", "Generate templates with a hole for wire", showWire); 
-	var vs = addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
+	var showWireChb = addOption(d, "showWire", "Generate templates with a hole for wire", showWire, "checkbox"); 
+	addOption(d, "wireSize", "Diameter of the wire, mm", wireSize);
 	showElement(document.getElementById("wireSize_option"), showWire);
 	showWireChb.addEventListener("change", function (e) {showElement(document.getElementById("wireSize_option"), e.target.checked);});
-	addCheckbox(d, "nightView", "Night view", nightView);
-	/*= document.createElement("input");
-	showWireChb.setAttribute("type", "checkbox");
-	if (showWire) showWireChb.setAttribute("checked", "checked");
-	d.appendChild(showWireChb);
-	addP(d, "Generate templates with a hole for wire", "span");
-	
-	showWireChb.onchange = function () {
-		
-		onOptionChanged("showWire", showWireChb.checked);
-		
-	}
-	
-	var nightViewChb = document.createElement("input");
-	nightViewChb.setAttribute("type", "checkbox");
-	if (nightView) nightViewChb.setAttribute("checked", "checked");
-	d.appendChild(nightViewChb);
-	addP(d, "Night view", "span");
-	nightViewChb.onchange = function () {
-		
-		onOptionChanged("nightView", nightViewChb.checked);
-		showElement(document.getElementById("wireSize_option"), showWireChb.checked);
-	}
-
-	*/
+	var nightViewChb = addOption(d, "nightView", "Night view", nightView, "checkbox");
 	addHideButton(d, "Options", "^", qs.hasOwnProperty("showOptions") ? getBool(qs.showOptions) : false);
 	
 }
-function addCheckbox (parent, name, description, defaultValue) {
-	var dd = createDiv("checkboxGroup", parent);
-	var chb = document.createElement("input");
-	chb.setAttribute("type", "checkbox");
-	if (defaultValue) chb.setAttribute("checked", "checked");
-	dd.appendChild(chb);
-	addP(dd, description, "span");
-	chb.addEventListener("change", function (e) {
-		
-		onOptionChanged(name, e.target.checked);
-	});
-	return chb;
+
+function onColorChanged(name) {
+		for (var i = 0; i < previews3d.length; i++) {
+			updateMaterial(previews3d[i], name == "nightView" ? {nightView: nightView} :{color: previewColor} );
+		}
+		if (name == "color") updateFacesPreview({color: previewColor});
+		hideWait();
 
 }
 
-function addOption (parent, name, description, defaultValue) {
+
+function addOption (parent, name, description, defaultValue, type = "text") {
 	var validNumberRegEx = "-?((\\d*\\.\\d+)|(\\d+))((e|E)-?\\d+)?";
-	if (!defaultValue) defaultVaule = qs[name];
+	if (defaultValue === undefined || defaultValue === null) defaultVaule = qs[name];
 	var d = createDiv("optionBlock", parent);
 	d.setAttribute("id", name+"_option");
 	var p =addP(d, "");
 	var pp = addP(p, description, "span");
-	var input = addP(p,"", "input");
-	if (name == "color") {
-		input.setAttribute("type", "color");
-		//TODO check browser support
-	} else {
-		input.setAttribute("type", "text");
-		
+	var input = document.createElement("input");
+	if (type == "checkbox") pp.prepend(input)
+	else pp.appendChild(input);
+	input.setAttribute("type", type);
+	if (type == "text") {
 		input.setAttribute("pattern", validNumberRegEx);
 	}
-	input.setAttribute("value", defaultValue);
+	if (type == "checkbox") {
+		if (defaultValue) input.setAttribute("checked", "checked");
+	} else 
+		input.setAttribute("value", defaultValue);
 	input.setAttribute("id", name + "_ui");
-	input.onchange = function () {
-		onOptionChanged(name, input.value);
-	}
+	input.addEventListener("change", function (e) {
+		onOptionChanged(name, type == "checkbox" ? input.checked : input.value);
+	});
 	return input;
 	
 }
 
 function onOptionChanged(name, value) {
-	if (name == "color") {
-		if (value.charAt(0) == "#") qs.color = value.slice(1)
-		else qs.color = value;
-		for (var i = 0; i < previews3d.length; i++) {
-			updateMaterial(previews3d[i], {color: value});
-		}
-		updateFacesPreview({color: value});
-		previewColor = value;
-		updateLinks(qs);
-	} else if (name == "thickness" || name == "showWire" || name == "wireSize") {
-		qs[name] = value; 
-		setGlobalVars(qs);
-		updateTemplatePages();
-		updateLinks(qs);
-	} else if (name == "nightView") {
-		qs.nightView = value;
-		nightView = value;
-		for (var i = 0; i < previews3d.length; i++) {
-			updateMaterial(previews3d[i], {nightView: value});
-		}
-		updateLinks(qs);
-	} else if (name == "size") {
-		qs.size = value;
-		delete qs.edge;
-		setGlobalVars(qs);
-		updateFacesPreview({color: previewColor});
-		updateTemplatePages();
-		updateDescriptions();
-		updateLinks(qs);
-	} else {
+
+	if (name == "baseVertices") {
 		var newQS = copyObject(qs);
-		if (name == "color" && value.charAt(0) == "#") 
-			newQS.color = value.slice(1);
-		else if (name == "baseVertices") {
-			var newvfArr = newQS.vf.split(".");
-			newvfArr.splice(-1, 1, value);
-			newQS.vf = newvfArr.join(".");
-		}
-		else 
-			newQS[name] = value;
+		var newvfArr = newQS.vf.split(".");
+		newvfArr.splice(-1, 1, value);
+		newQS.vf = newvfArr.join(".");
 		newQS.showOptions = true; 
 		newQS.showList = isVisible(document.getElementById("polyhedraList"));
 		newQS.showSideMenu = true;
 		location.assign(location.href.split("?")[0] + "?" + createQueryString(newQS));
+	} else {
+		if (name == "color" && value.charAt(0) == "#") qs.color = value.slice(1)
+		else qs[name] = value;
+		if (name == "size") delete qs.edge;
+		setGlobalVars(qs);
+		updateLinks(qs);
+		
+		if (name == "color" || name == "nightView") {
+			showWait();
+			setTimeout(function () {onColorChanged(name)}, 20);
+		} else if (name == "thickness" || name == "showWire" || name == "wireSize") {
+			updateTemplatePages();
+		} else if (name == "size") {
+			updateFacesPreview({color: previewColor});
+			updateTemplatePages();
+			updateDescriptions();
+		}
 	}
 }
 //-----------------------------------------------------------------------------------------
@@ -1155,7 +1128,6 @@ function getPolyObjectByVF(vf) {
 
 function create3DPreview(parent, color, templatesArray, vf, polyName){
 	var lp = null;
-	console.log(polyName);
 	if (PlatonicSolids.hasOwnProperty(polyName.toLowerCase())) 
 		lp = PlatonicSolids[polyName.toLowerCase()].clone();
 	else if (ArchimedeanSolids.hasOwnProperty(polyName.toLowerCase().split(" ").join("_"))) 
@@ -1222,26 +1194,17 @@ function create3DPreview(parent, color, templatesArray, vf, polyName){
 }
 
 function updateMaterial (ctx3d, options) {
-	if (options.hasOwnProperty("color")) {
-		var textureCanvas = getTextureCanvas(null, options.color, ctx3d.templates, ctx3d.vf).canvas;
+		var textureCanvas = getTextureCanvas(null, previewColor, ctx3d.templates, ctx3d.vf).canvas;
 		var texture = new THREE.CanvasTexture(textureCanvas);
 		ctx3d.poly3D.material.map = texture;
 		//ctx3d.poly3D.material.emissiveMap = texture;
 		ctx3d.poly3D.material.needsUpdate = true;
+		if (options.hasOwnProperty("nightView")) {
+			ctx3d.renderer.domElement.classList.remove(options.nightView ? "day" : "night");
+			ctx3d.renderer.domElement.classList.add(options.nightView ? "night" : "day");
+		}
 		updateThreeContext(ctx3d);
 		//var mat = new  THREE.MeshLambertMaterial({map: texture, transparent: true});
-	} else if (options.hasOwnProperty("nightView")) {
-		var textureCanvas = getTextureCanvas(null, previewColor, ctx3d.templates, ctx3d.vf).canvas;
-		console.log("Updating material", nightView);
-		var texture = new THREE.CanvasTexture(textureCanvas);
-		ctx3d.poly3D.material.map = texture;
-		//ctx3d.poly3D.material.emissiveMap = texture;
-		ctx3d.poly3D.material.needsUpdate = true;
-		ctx3d.renderer.domElement.classList.remove(options.nightView ? "day" : "night");
-		ctx3d.renderer.domElement.classList.add(options.nightView ? "night" : "day");
-		
-		updateThreeContext(ctx3d);
-	}
 }
 
 function updateFacesPreview(options) {
@@ -1322,7 +1285,7 @@ function getTextureCanvas(parent, color, templatesArray, vertexFigure ) {
 			}
 			
 		}
-		if (nightView) resCs.alphaToAbsorption(PC.viewAlpha);
+		if (nightView) resCs.alphaToAbsorption(PC.viewAlpha, previewColor);
 		return resCs;
 	} else {
 		console.warn("Invalid face types set", templatesArray, types);
@@ -1366,9 +1329,10 @@ function drawSpiralTemplateImpl(psvg, data ) {
 
 function animate()
 {
-    requestAnimationFrame ( animate ); 
+    //if (nightViewChanged) onNightViewChanged();
     for (var i = 0; i < previews3d.length; i++)
     	updateThreeContext(previews3d[i]);
+    requestAnimationFrame ( animate ); 
 }
 
 

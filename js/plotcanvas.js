@@ -91,8 +91,8 @@ function PlotCanvas (initObj = {}, parent = document.body) {
 	}
 	
 
-this.alphaToAbsorption = function(visibleAlpha = parseInt(this.scaleObj.fillAlpha, 16), countLayerAlpha = parseInt(this.scaleObj.fillAlpha, 16), light = {r:255, g:255, b:255, a:255}) {
-	PC.alphaToAbsorption(this.canvas, countLayerAlpha, visibleAlpha, light);
+this.alphaToAbsorption = function(visibleAlpha = parseInt(this.scaleObj.fillAlpha, 16), baseColor = null, countLayerAlpha = parseInt(this.scaleObj.fillAlpha, 16), light = {r:255, g:255, b:255, a:255}) {
+	PC.alphaToAbsorption(this.canvas, countLayerAlpha, visibleAlpha, baseColor, light);
 }
 	
 function plotParInit(qs, plotPar) {
@@ -172,56 +172,100 @@ PlotCanvas.defaults = {minY: -1, maxY: 1, maxX: 1, minX: -1, adjust: "all"/*"non
 this.countLayerAlpha = "1C";
 this.viewAlpha = "66";
 
-
 function transformCanvas (canvas, transformFunc) {
+	var t0 = performance.now();
 	var ctx = canvas.getContext('2d');
 	var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 	var data = imageData.data;
+	var t1 = performance.now();
     for (var i = 0; i < data.length; i += 4) {
-    	var newRGBA = transformFunc({r: data[i], g: data[i+1], b: data[i+2], a: data[i+3]});
-      data[i]     = newRGBA.r;     // red
-      data[i + 1] = newRGBA.g; // green
-      data[i + 2] = newRGBA.b; // blue
-      data[i + 3] = newRGBA.a; // blue
+    	transformFunc (data, i);
     }
+    var t2 = performance.now();
     ctx.putImageData(imageData, 0, 0);
+    var t3 = performance.now();
+    //console.log("transformCanvas: getting data:", t1- t0, " processing data:", t2-t1, " setting data: ", t3-t2);
 }
 this.transformCanvas = transformCanvas;
 
 this.invertAlpha = function(canvas) {
-	return transformCanvas(canvas, function (rgba) {return {r: rgba.r, g: rgba.g, b: rgba.b, a: 255-rgba.a};});
+	return transformCanvas(canvas, function (data, offset) {data[offset + 3] = 255 - data[offset + 3]});
 }
 
 this.alphaToAbsorption_ = function(canvas, gray = 0) {
-	return transformCanvas(canvas, function (rgba) {
-		var epsilon = 1 - rgba.a/255.0;
-		return {r: Math.round(gray*(1-epsilon) + rgba.r*epsilon), g: Math.round(gray*(1-epsilon) + rgba.g*epsilon), b: Math.round(gray*(1-epsilon) + rgba.b*epsilon), a: 255}
+	return transformCanvas(canvas, function (data, offset) {
+		var epsilon = 1 - data[offset + 3]/255.0;
+		for (var i = 0; i < 3; i++) data[offset +i ] = gray*(1-epsilon) + data[offset + i]*epsilon;
+		data[offset + 3] = 255;
 	});
 }
 
 this.alphaToAbsorption = function(canvas, 
 		layerAlpha = parseInt(PlotCanvas.defaults.fillAlpha, 16), 
-		visibleAlpha = parseInt(PlotCanvas.defaults.fillAlpha, 16)/*100*/, 
-		extLight = {r: 255, g:255, b: 255, a: 255}) {
+		visibleAlpha = parseInt(PlotCanvas.defaults.fillAlpha, 16)/*100*/, baseColor = null, 
+		extLight = null) {
+		
+	function absorb (color, layers, alpha, lightColor) {
+		var arr = color.toArray();
+		var lightArr = [1, 1, 1];
+		if (lightColor) lightArr = lightColor.toArray();
+		var res=[];
+		for (var i = 0; i < 3; i++) {
+			var base = Math.min(0.95, (arr[i]*vAlpha+1-vAlpha));
+			var n = layers;
+			res[i] = lightArr[i];
+			while (n-- > 0) res[i]*=base;
+		}
+		return new THREE.Color().fromArray(res).getHex();
+	}
+	
 	var log255 = Math.log(255);
 	var alpha = layerAlpha*0.003921569; // /255
 	var logA = Math.log(255.0-layerAlpha) - log255;
 	var vAlpha = visibleAlpha*0.003921569;
 	var maxC = 240; 
-	var maxLayer = -Math.log(layerAlpha)/logA;//=(LN(A35)/(LN(255)-LN(255-A35))), a35=
-	function transformPixel (rgba) {
-		var layers = rgba.a == 255 ? maxLayer: Math.min(maxLayer, Math.round((Math.log(255-rgba.a)-log255)/logA));
-		function getComponent(c) {
-			var base = (Math.min(maxC,rgba[c])*vAlpha+255-visibleAlpha)*0.003921569;
-			var n = layers;
-			var res = extLight[c];
-			while (n-- > 0 && res > 1) res*=base;
-			return Math.round(res);
-		}
-		//var epsilon = 1 - rgba.a/255.0;
-		return {r: getComponent("r"), g: getComponent("g"), b: getComponent("b"), a: 255}
+	var maxLayer = Math.floor(-Math.log(layerAlpha)/logA);
+	var lAlphas = [0];
+	var extLightArr = [extLight.r, extLight.g, extLight.b, extLight.a];
+	for (var i = 1; i < maxLayer; i++){
+		lAlphas[i] = Math.floor(layerAlpha + (1-alpha)*lAlphas[i-1]);
 	}
-	
+	function getLayers (a) {
+		
+		for (var i = 0; i < lAlphas.length; i++) {
+			if (a == lAlphas[i]) return i;
+			if (a < lAlphas[i]) return i-1;
+		}
+		return maxLayer;
+	}
+	if (baseColor) { 
+		baseColor = new THREE.Color(baseColor);
+		var colors = [];
+		var extLightColor = extLight ? new THREE.Color(extLight) : null;
+		for (var i = 0; i <= maxLayer; i++) {
+			colors[i] = absorb(baseColor, i, alpha, extLightColor);
+		}
+		function transformPixel (data, offset) {
+			var pixColor = colors[getLayers(data[offset + 3])];
+			data[offset] = (pixColor & 0xff0000) >> 16;
+			data[offset + 1] = (pixColor & 0x00ff00) >> 8;
+			data[offset + 2] = pixColor & 0x0000ff;
+			data[offset + 3] = 0xff;
+		}
+	} else {
+		if (! extLight) extLight = {r: 255, g:255, b: 255, a: 255};
+		function transformPixel (data, offset) {
+			var layers = getLayers(data[offset + 3]);
+			for (var i = 0; i < 3; i++) {
+				var base = (Math.min(maxC,data[offset + i])*vAlpha+255-visibleAlpha)*0.003921569;
+				var n = layers;
+				var res = extLightArr[i];
+				while (n-- > 0 && res > 1) res*=base;
+				data[offset + i] = res;
+			}
+			data[offset + 3] = 255;
+		}
+	}
 	return transformCanvas(canvas, transformPixel );
 }
 }).apply(PlotCanvas);
