@@ -70,13 +70,16 @@ function setGlobalVars (qs) {
 function hideSideMenu() {
 	document.getElementById('list').style.width = '0';
   	document.getElementById('main').style.marginLeft = '0';
+	document.getElementById('list').style.overflow = 'hidden';
   	document.getElementById('menuButton').style.display='inline-block';
   	document.getElementById('hideMenuButton').style.display='none';
+	
   	//TODO hide list and options (or get rid of a scroller some other way)
 }
 
 function showSideMenu() {
 	document.getElementById('list').style.width = '250px';
+	document.getElementById('list').style.overflow = 'auto';
   	document.getElementById('main').style.marginLeft = '250px'; 
   	document.getElementById('menuButton').style.display='none'
   	document.getElementById('hideMenuButton').style.display='inline-block'
