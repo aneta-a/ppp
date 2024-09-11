@@ -41,6 +41,7 @@ function pageInit() {
 	
 	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
 		showSideMenu();
+	else hideSiedMenu();
 	
 	readCSVData("templates.csv");
 	animate();
@@ -73,8 +74,6 @@ function hideSideMenu() {
 	document.getElementById('list').style.overflow = 'hidden';
   	document.getElementById('menuButton').style.display='inline-block';
   	document.getElementById('hideMenuButton').style.display='none';
-	
-  	//TODO hide list and options (or get rid of a scroller some other way)
 }
 
 function showSideMenu() {
