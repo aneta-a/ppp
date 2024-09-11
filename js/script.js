@@ -41,7 +41,7 @@ function pageInit() {
 	
 	if (qs.hasOwnProperty("showSideMenu") && qs.showSideMenu && qs.showSideMenu.toLowerCase() != "no" && qs.showSideMenu.toLowerCase() != "false")
 		showSideMenu();
-	else hideSiedMenu();
+	else hideSideMenu();
 	
 	readCSVData("templates.csv");
 	animate();
